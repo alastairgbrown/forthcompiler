@@ -13,3 +13,16 @@ Forth Code                                    | Expected result
 0 case 1 of 10 endof 2 of 20 20 endof endcase | 
 1 case 1 of 10 endof 2 of 20 20 endof endcase | 10
 2 case 1 of 10 endof 2 of 20 20 endof endcase | 20 20
+
+```forth
+: mul ( a b -- a*b )
+   a ! b ! 0 product !
+   begin a @ 0<> while
+     a @ 1 and 0<> if b @ product +! then
+     b @ b +!
+     a @ 1 rshift a !
+   repeat
+   product @
+   ;
+
+```
