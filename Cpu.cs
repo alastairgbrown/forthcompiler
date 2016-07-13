@@ -28,7 +28,7 @@ namespace ForthCompiler
             LastHeap = new int[compiler.HeapSize];
         }
 
-        public string[] ThisState => new[]
+        public IEnumerable<string> ThisState => new[]
         {
             $"PS={ProgramSlot:X} ",
             $"SP={Stack.Count} ",
@@ -36,10 +36,8 @@ namespace ForthCompiler
             $"Next={_next} ",
             $"Carry={_carry} ",
             $"{_error}{Environment.NewLine}",
-            $"Stack={string.Join(null, Stack.Reverse().Select(s => s + " "))}",
-            $"{_next} ",
-            $"{_top}"
-        };
+            $"Stack=",
+        }.Concat(ForthStack.Reverse().Select(i => $"{i} "));
 
         void Step()
         {
@@ -82,7 +80,7 @@ namespace ForthCompiler
                 case Code.Cnz:
                     if (_top != 0)
                     {
-                        var temp = ProgramSlot;
+                        var temp = (ProgramSlot + 7) / 8;
                         ProgramSlot = _top * 8;
                         _top = temp;
                     }
@@ -133,7 +131,7 @@ namespace ForthCompiler
         public void Run(Func<int, bool?> continueCondition)
         {
             _error = null;
-            LastState = ThisState;
+            LastState = ThisState.ToArray();
             Array.Copy(Heap, LastHeap, Heap.Length);
 
             for (int i = 0; continueCondition(i) ?? true; i++)

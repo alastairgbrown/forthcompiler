@@ -1,14 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
-using System.Windows.Controls;
 
 namespace ForthCompiler
 {
+    [SuppressMessage("ReSharper", "UnusedMember.Local")]
+    [SuppressMessage("ReSharper", "UnusedParameter.Local")]
     public class Compiler
     {
         public List<Token> Tokens { get; } = new List<Token>();
@@ -17,6 +18,11 @@ namespace ForthCompiler
 
         public Dictionary<string, IDictEntry> Dict { get; } = new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase)
         {
+            {TokenType.Stack, "_Take1_", "__t1 !"},
+            {TokenType.Stack, "_Take2_", "__t2 ! __t1 !"},
+            {TokenType.Stack, "_Take3_", "__t3 ! __t2 ! __t1 !"},
+            {TokenType.Stack, "_Take4_", "__t4 ! __t3 ! __t2 ! __t1 !"},
+
             {TokenType.Math, "+", Code.Add, Code.Pop},            { "1 1 +", "2" },
             {TokenType.Math, "-", Code.Sub, Code.Pop},            { "1 1 -", "0" },
             {TokenType.Math, "*", nameof(NotImplementedException)},
@@ -30,27 +36,24 @@ namespace ForthCompiler
                                                                     { "0 0=", "-1" },  { "1 0=", "0" },
             {TokenType.Math, "0<>", Code.Psh, Code.Zeq, Code.Swp, Code.Zeq, Code.Pop},
                                                                     { "0 0<>", "0" },  { "1 0<>", "-1" },
-            {TokenType.Math, "<", "- drop 0 dup adc drop 0<>"},     { "0 1 <",  "-1" }, { "1 0 <",  "0"  }, { "1 1 <",  "0" },
+            {TokenType.Math, "<", "- drop 0 dup /adc drop 0<>"},    { "0 1 <",  "-1" }, { "1 0 <",  "0"  }, { "1 1 <",  "0" },
             {TokenType.Math, ">", "swap <"},                        { "0 1 >",  "0"  }, { "1 0 >",  "-1" }, { "1 1 >",  "0" },
             {TokenType.Math, "<=", "swap >="},                      { "0 1 <=", "-1" }, { "1 0 <=", "0"  }, { "1 1 <=", "-1" },
-            {TokenType.Math, ">=", "- drop 0 dup adc drop 0="},     { "0 1 >=", "0"  }, { "1 0 >=", "-1" }, { "1 1 >=", "-1" },
+            {TokenType.Math, ">=", "- drop 0 dup /adc drop 0="},    { "0 1 >=", "0"  }, { "1 0 >=", "-1" }, { "1 1 >=", "-1" },
             {TokenType.Math, "And", Code.And, Code.Pop},            { "127 192 and", "64"  },
             {TokenType.Math, "Xor", Code.Xor, Code.Pop},            { "127 192 xor", "191"  },
             {TokenType.Math, "Or", "-1 xor swap -1 xor and -1 xor"},{ "127 192 or", "255"  },
             {TokenType.Math, "Invert", "-1 xor"},                   { "-1 invert", "0" }, { "0 invert", "-1" },
 
             {TokenType.Math, "MOD", nameof(NotImplementedException)},
-            {TokenType.Math, "NEGATE", "0 swap -"},               { "0 NEGATE", "0" }, { "-1 NEGATE", "1" },{ "1 NEGATE", "-1" },
-            {TokenType.Math, "ABS", "Dup 0 < IF Negate Then"},    { "-1 ABS", "1" },{ "1 ABS", "1" },
-            {TokenType.Math, "MIN", "2Dup > IF Swap Then drop"},  { "0 1 MIN", "0" },{ "1 0 MIN", "0" },
-            {TokenType.Math, "MAX", "2Dup < IF Swap Then drop"},  { "0 1 MAX", "1" },{ "1 0 MAX", "1" },
-            {TokenType.Math, "LShift", "__t1 ! begin __t1 @ 0<> while dup + __t1 @ 1 - __t1 ! repeat"},
-            {TokenType.Math, "RShift", "__t1 ! begin __t1 @ 0<> while dup LSR drop __t1 @ 1 - __t1 ! repeat"},
-
-            {TokenType.Stack, "_Take1_", "__t1 !"},
-            {TokenType.Stack, "_Take2_", "__t2 ! __t1 !"},
-            {TokenType.Stack, "_Take3_", "__t3 ! __t2 ! __t1 !"},
-            {TokenType.Stack, "_Take4_", "__t4 ! __t3 ! __t2 ! __t1 !"},
+            {TokenType.Math, "NEGATE", "0 swap -"},                 { "0 NEGATE", "0" }, { "-1 NEGATE", "1" },{ "1 NEGATE", "-1" },
+            {TokenType.Math, "ABS", "Dup 0 < IF Negate Then"},      { "-1 ABS", "1" },{ "1 ABS", "1" },
+            {TokenType.Math, "MIN", "2Dup > IF Swap Then drop"},    { "0 1 MIN", "0" },{ "1 0 MIN", "0" },
+            {TokenType.Math, "MAX", "2Dup < IF Swap Then drop"},    { "0 1 MAX", "1" },{ "1 0 MAX", "1" },
+            {TokenType.Math, "LShift", "_take1_ begin __t1 @ 0<> while dup + __t1 @ 1 - __t1 ! repeat"},
+                                                                    { "16 4 lshift","256" },
+            {TokenType.Math, "RShift", "_take1_ begin __t1 @ 0<> while dup /LSR drop __t1 @ 1 - __t1 ! repeat"},
+                                                                    { "16 4 rshift","1" },
 
             {TokenType.Stack, "DUP", Code.Psh},                     { "1 DUP", "1 1" },
             {TokenType.Stack, "?DUP", "DUP DUP 0= IF DROP THEN"},   { "1 ?DUP", "1 1" }, { "0 ?DUP", "0" },
@@ -76,21 +79,23 @@ namespace ForthCompiler
 
             {TokenType.Math, "@", Code.Ldw},
             {TokenType.Math, "!", Code.Stw, Code.Pop, Code.Pop},
-            {TokenType.Math, "+!", "dup -rot @ + swap !"},
-                                                             { "1 __t4 ! 1 __t4 +! __t4 @", "2" },
-                                                             { "5 __t4 ! 1 __t4 +! __t4 @", "6" },
-            {TokenType.Structure, "Misc tests", string.Empty},
+            {TokenType.Math, "+!", "dup -rot @ + swap !"},          { "1 __t4 ! 1 __t4 +! __t4 @", "2" },
+                                                                    { "5 __t4 ! 2 __t4 +! __t4 @", "7" },
+            {TokenType.Structure, "Misc tests", " "},
+            {"5 CONSTANT TestConstant TestConstant",          "5" },
+            {"[ 1 2 3 + + ]",                                 "6" },
             {"1 if 2 else 3 then",                            "2" },
             {"0 if 2 else 3 then",                            "3" },
             {"5 0 do I loop",                                 "0 1 2 3 4"},
-            {"5 1 do I loop",                                 " 1 2 3 4"},
-            {"5 0 do I 2 +loop",                              " 0 2 4"},
-            {"5 0 do I i 3 = if leave then loop",             " 0 1 2 3"},
-            {"5 begin dup 0<> while dup 1 - repeat",          " 5 4 3 2 1 0"},
-            {"5 begin dup 1 - dup 0= until",                  " 5 4 3 2 1 0"},
-            {"0 case 1 of 10 endof 2 of 20 20 endof endcase", ""},
+            {"5 1 do I loop",                                 "1 2 3 4"},
+            {"5 0 do I 2 +loop",                              "0 2 4"},
+            {"2 0 do 12 10 do J I loop loop",                 "0 10 0 11 1 10 1 11"},
+            {"5 begin dup 0<> while dup 1 - repeat",          "5 4 3 2 1 0"},
+            {"5 begin dup 1 - dup 0= until",                  "5 4 3 2 1 0"},
+            {"0 case 1 of 10 endof 2 of 20 20 endof endcase", " "},
             {"1 case 1 of 10 endof 2 of 20 20 endof endcase", "10"},
             {"2 case 1 of 10 endof 2 of 20 20 endof endcase", "20 20"},
+            {": def dup + ; 123 def",                         "246"},
         };
 
 
@@ -101,9 +106,9 @@ namespace ForthCompiler
 
         public Compiler()
         {
-            foreach (var code in Enum.GetValues(typeof(Code)).Cast<Code>().Where(c => !Dict.ContainsKey(c.ToString())))
+            foreach (var code in Enum.GetValues(typeof(Code)).Cast<Code>())
             {
-                Dict.Add(TokenType.Math, code.ToString(), code);
+                Dict.Add(TokenType.Math, $"/{code}", code);
             }
 
             foreach (var method in GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
@@ -115,11 +120,11 @@ namespace ForthCompiler
             }
         }
 
-        T MakeDictEntry<T>(string key, Func<T> createFunc) where T : IDictEntry
+        T MakeDictEntry<T>(string key, Func<T> createFunc, bool exclusive = false) where T : IDictEntry
         {
             IDictEntry entry;
 
-            if (Dict.TryGetValue(key, out entry) && !(entry is T))
+            if (Dict.TryGetValue(key, out entry) && (exclusive || !(entry is T)))
             {
                 throw new Exception($"{key} already defined as {entry.GetType().Name}");
             }
@@ -142,7 +147,7 @@ namespace ForthCompiler
         private void Macro(string macro)
         {
             Regex.Matches(macro, @"\b__\w+\b").OfType<Match>().ToList().ForEach(m => GetVariable(m.Value));
-            ReadFile(_tokenIndex + 1, Token.File, y => Token.Y, y => Token.X, new[] { $" {macro}" }, true);
+            ReadFile(_tokenIndex + 1, Token.File, y => Token.Y, y => Token.X, new[] { $" {macro}" }, Token.MacroLevel + 1);
         }
 
         public Token Token => _tokenIndex < Tokens.Count ? Tokens[_tokenIndex] : null;
@@ -164,12 +169,12 @@ namespace ForthCompiler
             }
         }
 
-        public void ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, string[] input, bool isMacro = false)
+        public void ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, string[] input, int macroLevel = 0)
         {
             Tokens.InsertRange(pos, input.SelectMany(
                 (s, i) => Regex.Matches(s, @"""([^""]|"""")*""|\S+|\s+")
                     .OfType<Match>()
-                    .Select(m => new Token(m.Value, file, y(i), x(m.Index), isMacro))));
+                    .Select(m => new Token(m.Value, file, y(i), x(m.Index), macroLevel))));
         }
 
         public void Parse()
@@ -235,6 +240,7 @@ namespace ForthCompiler
                 }
 
                 Token.CodeSlot = CodeSlots.Count;
+                Token.DictEntry = dictEntry;
             }
 
             dictEntry.Method.Invoke(this, new object[] { dictEntry });
@@ -250,9 +256,9 @@ namespace ForthCompiler
             Encode(dictEntry.Codes);
         }
 
-        public void Definition(DefinitionBase dictEntry)
+        public void DefinitionEntry(DefinitionEntry dictEntry)
         {
-            Macro($"ADDR {Token} CNZ");
+            Macro($"addr {Token.Text}LABEL /CNZ label {Token}");
         }
 
         public void VariableEntry(VariableEntry dictEntry)
@@ -279,14 +285,15 @@ namespace ForthCompiler
         [Method(null, TokenType.Organisation, HasArgument = true)]
         private void Constant(MethodAttribute dictEntry)
         {
-            if (Dict.ContainsKey(Token.Text))
-            {
-                throw new Exception("Already defined");
-            }
+            var start = Tokens[_tokenIndex - 4];
+            var cpu = new Cpu(this) { ProgramSlot = start.CodeSlot };
 
-            MakeDictEntry(Token.Text, () => new ConstantEntry { Value = Tokens[_tokenIndex - 2].Value });
+            cpu.Run(i => cpu.ProgramSlot < CodeSlots.Count);
+            CodeSlots.RemoveRange(start.CodeSlot, CodeSlots.Count - start.CodeSlot);
 
-            //Codes.RemoveRange(Tokens[_tokenIndex - 2].CodeSlot, Codes.Count - (Tokens[_tokenIndex - 2].CodeSlot));
+            Tokens.SkipWhile(t => t != start).Skip(1).ToList().ForEach(t => t.CodeSlot = CodeSlots.Count);
+
+            MakeDictEntry(Token.Text, () => new ConstantEntry {Value = cpu.ForthStack.First()}, true);
         }
 
         [Method(null, TokenType.Organisation, HasArgument = true)]
@@ -327,12 +334,7 @@ namespace ForthCompiler
         [Method(null, TokenType.Organisation, HasArgument = true)]
         private void Variable(MethodAttribute dictEntry)
         {
-            if (!Token.IsMacro && Dict.ContainsKey(Token.Text))
-            {
-                throw new Exception("Already defined");
-            }
-
-            Token.DictEntry = GetVariable(Token.Text);
+            Token.DictEntry = MakeDictEntry(Token.Text, () => new VariableEntry(), Token.MacroLevel == 0);
         }
 
         [Method(null, TokenType.Organisation)]
@@ -353,7 +355,6 @@ namespace ForthCompiler
         [Method("]", TokenType.Math)]
         private void CompilerEvalStop(MethodAttribute dictEntry)
         {
-            NotImplementedException(null);
             var start = _structureStack.Pop(nameof(CompilerEvalStart));
             var cpu = new Cpu(this) { ProgramSlot = start.CodeSlot };
 
@@ -372,7 +373,7 @@ namespace ForthCompiler
         [Method(null, TokenType.Structure)]
         private void If(MethodAttribute dictEntry)
         {
-            Macro($"0= ADDR {Token} AND JNZ");
+            Macro($"0= addr {Token} AND /JNZ");
             _structureStack.Push(Token);
         }
 
@@ -383,7 +384,7 @@ namespace ForthCompiler
 
             _structureStack.Push(Token);
 
-            Macro($"ADDR {Token} JNZ LABEL {ifToken}");
+            Macro($"addr {Token} /JNZ label {ifToken}");
 
         }
 
@@ -399,7 +400,7 @@ namespace ForthCompiler
         {
             var start = _structureStack.SkipWhile(s => s.MethodName != nameof(DefinitionStart)).First();
 
-            Macro($"{start}RA @ code jnz");
+            Macro($"{start}RA @ code /jnz");
         }
 
         [Method(null, TokenType.Structure)]
@@ -408,8 +409,8 @@ namespace ForthCompiler
             _structureStack.Push(Token);
 
             Macro($@"_{Token}I ! _{Token}LIM !
-                     LABEL {Token}START
-                     _{Token}I @ _{Token}LIM @ >= ADDR {Token}END AND JNZ");
+                     label {Token}START
+                     _{Token}I @ _{Token}LIM @ >= addr {Token}END AND /JNZ");
 
         }
 
@@ -418,7 +419,7 @@ namespace ForthCompiler
         {
             var doToken = _structureStack.Pop(nameof(Do));
 
-            Macro($"1 _{doToken}I +! ADDR {doToken}START jnz LABEL {doToken}END");
+            Macro($"1 _{doToken}I +! addr {doToken}START /jnz label {doToken}END");
         }
 
         [Method("+LOOP", TokenType.Structure)]
@@ -426,7 +427,7 @@ namespace ForthCompiler
         {
             var doToken = _structureStack.Pop(nameof(Do));
 
-            Macro($"_{doToken}I +! ADDR {doToken}START jnz LABEL {doToken}END");
+            Macro($"_{doToken}I +! addr {doToken}START /jnz label {doToken}END");
         }
 
         [Method(null, TokenType.Structure)]
@@ -437,13 +438,22 @@ namespace ForthCompiler
             Macro($"_{doToken}I @");
         }
 
+        [Method(null, TokenType.Structure)]
+        private void J(MethodAttribute dictEntry)
+        {
+            var doToken = _structureStack.SkipWhile(s => s.MethodName != nameof(Do)).Skip(1)
+                                         .SkipWhile(s => s.MethodName != nameof(Do)).First();
+
+            Macro($"_{doToken}I @");
+        }
+
 
         [Method(null, TokenType.Structure)]
         private void Leave(MethodAttribute dictEntry)
         {
             var doToken = _structureStack.SkipWhile(s => s.MethodName != nameof(Do)).First();
 
-            Macro($"ADDR {doToken}END jnz");
+            Macro($"addr {doToken}END /jnz");
         }
 
         [Method(null, TokenType.Structure)]
@@ -458,7 +468,7 @@ namespace ForthCompiler
         {
             var beginToken = _structureStack.Pop(nameof(Begin));
 
-            Macro($"ADDR {beginToken} Jnz");
+            Macro($"addr {beginToken} /Jnz");
         }
 
         [Method(null, TokenType.Structure)]
@@ -466,14 +476,14 @@ namespace ForthCompiler
         {
             var beginToken = _structureStack.Pop(nameof(Begin));
 
-            Macro($"0= ADDR {beginToken} and jnz");
+            Macro($"0= addr {beginToken} and /jnz");
         }
 
         [Method(null, TokenType.Structure)]
         private void While(MethodAttribute dictEntry)
         {
             _structureStack.Push(Token);
-            Macro($"0= ADDR {Token} And Jnz");
+            Macro($"0= addr {Token} And /Jnz");
         }
 
         [Method(null, TokenType.Structure)]
@@ -482,7 +492,7 @@ namespace ForthCompiler
             var whileToken = _structureStack.Pop(nameof(While));
             var beginToken = _structureStack.Pop(nameof(Begin));
 
-            Macro($"ADDR {beginToken} Jnz label {whileToken}");
+            Macro($"addr {beginToken} /Jnz label {whileToken}");
 
         }
 
@@ -499,7 +509,7 @@ namespace ForthCompiler
             var caseToken = _structureStack.SkipWhile(s => s.MethodName != nameof(Case)).First();
 
             _structureStack.Push(Token);
-            Macro($"_{caseToken} @ <> ADDR {Token} AND JNZ");
+            Macro($"_{caseToken} @ <> addr {Token} AND /JNZ");
         }
 
         [Method(null, TokenType.Structure)]
@@ -508,7 +518,7 @@ namespace ForthCompiler
             var caseToken = _structureStack.SkipWhile(s => s.MethodName != nameof(Case)).First();
             var ofToken = _structureStack.Pop(nameof(Of));
 
-            Macro($"ADDR {caseToken} JNZ LABEL {ofToken}");
+            Macro($"addr {caseToken} /JNZ label {ofToken}");
         }
 
         [Method(null, TokenType.Structure)]
@@ -552,13 +562,10 @@ namespace ForthCompiler
         [Method(":", TokenType.Definition, HasArgument = true)]
         public void DefinitionStart(MethodAttribute dictEntry)
         {
-            if (Dict.ContainsKey(Token.Text))
-            {
-                throw new Exception("Already defined");
-            }
+            MakeDictEntry(Token.Text, () => new DefinitionEntry(), true);
 
             _structureStack.Push(Token);
-            Macro($"ADDR {Token}SKIP code jnz LABEL {Token} VARIABLE {Token}RA {Token}RA !");
+            Macro($"addr {Token}skip /jnz label {Token.Text}LABEL _{Token}RA !");
         }
 
         [Method(";", TokenType.Definition)]
@@ -566,7 +573,7 @@ namespace ForthCompiler
         {
             var start = _structureStack.Pop(nameof(DefinitionStart));
 
-            Macro($"{start}RA @ code jnz LABEL {start}SKIP");
+            Macro($"_{start}RA @ /jnz label {start}SKIP");
         }
         #endregion
     }
@@ -599,6 +606,12 @@ namespace ForthCompiler
         public MethodInfo Method => typeof(Compiler).GetMethod(nameof(Compiler.ConstantEntry));
         public TokenType TokenType => TokenType.Constant;
         public int Value { get; set; }
+    }
+
+    public class DefinitionEntry : IDictEntry
+    {
+        public MethodInfo Method => typeof(Compiler).GetMethod(nameof(Compiler.DefinitionEntry));
+        public TokenType TokenType => TokenType.Definition;
     }
 
     public class TestCase : IDictEntry

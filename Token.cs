@@ -7,18 +7,18 @@ namespace ForthCompiler
     {
         private TokenType? _tokenType;
 
-        public Token(string text, string file, int y, int x, bool isMacro)
+        public Token(string text, string file, int y, int x, int macroLevel)
         {
             Text = text;
             File = file;
             Y = y;
             X = x;
-            IsMacro = isMacro;
+            MacroLevel = macroLevel;
             _tokenType = Regex.IsMatch(Text, @"^(\s)") ? TokenType.Excluded :
                          Regex.IsMatch(Text, @"^-?\d+$") ? TokenType.Literal : (TokenType?)null;
         }
 
-        public bool IsMacro { get; set; }
+        public int MacroLevel { get; set; }
 
         public string File { get; }
         public int Y { get; }
@@ -31,7 +31,7 @@ namespace ForthCompiler
 
         public override string ToString()
         {
-            return MethodName == nameof(Compiler.DefinitionStart) ? $"_{Text}" : $"_{Text}_{CodeSlot:X}";
+            return $"_{Text}_{CodeSlot:X}";
         }
 
         public int CodeSlot { get; set; } = -1;

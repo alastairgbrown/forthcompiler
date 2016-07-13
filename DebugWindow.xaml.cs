@@ -4,7 +4,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
@@ -20,7 +19,7 @@ namespace ForthCompiler
     {
         private readonly bool _test;
         private int[] _originalCodeCounts;
-        private bool _hideMacros = true;
+        private int _macroLevel;
         public Compiler Compiler { get; }
 
         public Cpu Cpu { get; set; }
@@ -80,7 +79,7 @@ namespace ForthCompiler
                     SourceItems.Add(new SourceItem { Parent = this });
                 }
 
-                if (token.IsMacro && _hideMacros)
+                if (token.MacroLevel > _macroLevel)
                 {
                     SourceItems.Last().Tokens.Last().CodeCount += token.CodeCount;
                 }
@@ -91,107 +90,111 @@ namespace ForthCompiler
             }
         }
 
-
-
-        private void Refresh()
+        private void Refresh(Func<SourceItem, bool> refreshSource, Func<HeapItem, bool> refreshHeap)
         {
-            var lastState = Cpu.LastState ?? Cpu.ThisState;
-            var thisState = Cpu.ThisState;
+            var lastState = Cpu.LastState ?? Cpu.ThisState.ToArray();
+            var thisState = Cpu.ThisState.ToArray();
             var textBlock = new TextBlock();
+
+            Array.Resize(ref lastState, Math.Max(lastState.Length, thisState.Length));
+            Array.Resize(ref thisState, Math.Max(lastState.Length, thisState.Length));
 
             for (var i = 0; i < thisState.Length; i++)
             {
-                textBlock.Inlines.Add(new Run { Text = thisState[i], Foreground = thisState[i] == lastState[i] ? Brushes.Black : Brushes.Red });
+                textBlock.Inlines.Add(new Run { Text = thisState[i] ?? "-", Foreground = thisState[i] == lastState[i] ? Brushes.Black : Brushes.Red });
             }
 
             CpuLabel.Content = textBlock;
 
-            foreach (var item in SourceItems)
+            foreach (var item in SourceItems.Where(refreshSource))
             {
                 item.Refresh();
             }
 
-            foreach (var item in HeapItems)
+            foreach (var item in HeapItems.Where(refreshHeap))
             {
                 item.Refresh();
             }
         }
 
+        private void Run(Func<int, bool?> continueCondition)
+        {
+            var linebefore = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+
+            Cpu.Run(continueCondition);
+
+            var lineafter = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+
+            Refresh(si => si == linebefore || si == lineafter, hi => hi.IsChanged);
+        }
 
 
         private void StepAsmButton_Click(object sender, RoutedEventArgs e)
         {
-            Cpu.Run(i => i == 0);
-            Refresh();
+            Run(i => i == 0);
         }
 
         private void StepTokenButton_Click(object sender, RoutedEventArgs e)
         {
             var token = Compiler.Tokens.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
 
-            Cpu.Run(i => token?.Contains(Cpu.ProgramSlot));
-            Refresh();
+            Run(i => token?.Contains(Cpu.ProgramSlot));
         }
 
         private void StepLineButton_Click(object sender, RoutedEventArgs e)
         {
-            var item = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+            var line = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
 
-            Cpu.Run(i => item?.Contains(Cpu.ProgramSlot));
-            Refresh();
+            Run(i => line?.Contains(Cpu.ProgramSlot));
         }
 
         private void RunButton_Click(object sender, RoutedEventArgs e)
         {
             var breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeSlot));
 
-            Cpu.Run(i => i == 0 || !breaks.Contains(Cpu.ProgramSlot));
-            Refresh();
+            Run(i => i == 0 || !breaks.Contains(Cpu.ProgramSlot));
         }
 
         private void RestartButton_Click(object sender, RoutedEventArgs e)
         {
             Cpu = new Cpu(Compiler);
-            Refresh();
+
+            Refresh(si => true, hi => true);
         }
 
-        private void CheckTestButton_Click(object sender, RoutedEventArgs e)
+        private void RunTestsButton_Click(object sender, RoutedEventArgs e)
         {
-            var results = Cpu.ForthStack.Reverse().ToArray();
-            int success = 0, fail = 0, invalid = 0;
+            var tests = SourceItems.Any(si => si.Break) ? SourceItems.Where(si => si.Break).ToArray() : SourceItems.ToArray();
+            var results = new Dictionary<string, int> { { "PASS", 0 }, { "FAIL", 0 } };
 
-            SourceItems.ToList().ForEach(si => si.TestResult = null);
-
-            for (int i = 0, count; i < results.Length; i += count)
+            foreach (var test in tests)
             {
-                count = results[i];
+                Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeSlot };
+                Cpu.Run(i => test.Contains(Cpu.ProgramSlot));
 
-                if (count < 2 || i + count > results.Length || (count % 2) != 0)
+                var stack = Cpu.ForthStack.Reverse().ToArray();
+                var result = "FAIL";
+
+                if (stack.Length > 0 && stack.Length == 1 + stack.First() * 2)
                 {
-                    invalid++;
-                    break;
-                }
-
-                int line = results[i + 1], items = count / 2 - 1;
-
-                if (Enumerable.Range(i + 2, items).Any(x => results[x] != results[x + items]))
-                {
-                    fail++;
-                    SourceItems[line - 1].TestResult = $"FAIL {string.Join(" ", results.Skip(i + 2).Take(count - 2))}";
-
+                    var actual = string.Join(" ", stack.Skip(1).Take(stack.First()));
+                    var expected = string.Join(" ", stack.Skip(1 + stack.First()).Take(stack.First()));
+                    result = actual == expected ? "PASS" : "FAIL";
+                    test.TestResult = $"{result} expected={expected} actual={actual}";
                 }
                 else
                 {
-                    success++;
-                    SourceItems[line - 1].TestResult = $"SUCCESS {string.Join(" ", results.Skip(i + 2).Take(count - 2))}";
+                    test.TestResult = $"{result} stack={string.Join(" ", stack)}";
                 }
+
+                results[result]++;
             }
 
-            Refresh();
+            Refresh(si => true, hi => true);
 
             var textBlock = new TextBlock();
 
-            textBlock.Inlines.Add(new Run { Text = $"{ success } lines succeeded, { fail } lines failed, {invalid} format failures" });
+            textBlock.Inlines.Add(new Run { Text = $"Test result - {string.Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}" });
 
             CpuLabel.Content = textBlock;
         }
@@ -205,14 +208,24 @@ namespace ForthCompiler
                 Cpu.ProgramSlot = item.CodeSlot;
             }
 
-            Refresh();
+            Refresh(si => true, hi => true);
         }
 
-        private void HideShowMacro_Click(object sender, RoutedEventArgs e)
+        private void Show_Click(object sender, RoutedEventArgs e)
         {
-            _hideMacros = !_hideMacros;
             LoadSource();
-            Refresh();
+            Refresh(si => true, hi => true);
+        }
+
+        private void MacroLevel_Click(object sender, RoutedEventArgs e)
+        {
+            var menuItems = View.Items.OfType<Control>().TakeWhile(c => c is MenuItem).OfType<MenuItem>().ToList();
+
+            _macroLevel = menuItems.IndexOf((MenuItem)sender);
+            menuItems.ForEach(mi => mi.IsChecked = ReferenceEquals(mi, sender));
+
+            LoadSource();
+            Refresh(si => true, hi => true);
         }
     }
 
@@ -237,7 +250,9 @@ namespace ForthCompiler
 
         public int Value => Parent.Cpu.Heap[Address];
 
-        public Brush Foreground => Parent.Cpu.Heap[Address] == Parent.Cpu.LastHeap[Address] ? Brushes.Black : Brushes.Red;
+        public Brush Foreground => IsChanged ? Brushes.Red : Brushes.Black;
+
+        public bool IsChanged => Parent.Cpu.Heap[Address] != Parent.Cpu.LastHeap[Address];
 
         public void Refresh()
         {
@@ -270,8 +285,7 @@ namespace ForthCompiler
         {
             get
             {
-                var block = new TextBlock();
-                var count = 0;
+                var block = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 1000, MinWidth = 1000 };
 
                 foreach (var token in Tokens)
                 {
@@ -279,12 +293,27 @@ namespace ForthCompiler
 
                     block.Inlines.Add(new Run
                     {
-                        Text = token.Text + (count > 80 ? Environment.NewLine : string.Empty),
+                        Text = token.Text,
                         Foreground = TokenColors[token.TokenType],
                         Background = current ? Brushes.LightGray : Brushes.Transparent,
                     });
 
-                    count = count > 80 ? 0 : count + block.Inlines.OfType<Run>().Last().Text.Length;
+                    for (int i = 0, slot = token.CodeSlot; Parent.ShowAsm.IsChecked && i < token.CodeCount; i++, slot++)
+                    {
+                        var codeslot = Parent.Compiler.CodeSlots[slot];
+
+                        if (codeslot == null)
+                            continue;
+
+                        current = Parent.Cpu.ProgramSlot == slot;
+
+                        block.Inlines.Add(new Run
+                        {
+                            Text = $" {codeslot}",
+                            Background = current ? Brushes.LightGray : Brushes.Transparent,
+                            ToolTip = $"{slot:X}"
+                        });
+                    }
                 }
 
                 return block;
@@ -292,39 +321,11 @@ namespace ForthCompiler
         }
 
         public string Address => $"{Tokens.First().CodeSlot:X}";
-
-        public TextBlock Code
-        {
-            get
-            {
-                var block = new TextBlock();
-                var count = 0;
-
-                for (int i = 0, slot = CodeSlot; i < CodeCount; i++, slot++)
-                {
-                    var current = Parent.Cpu.ProgramSlot == slot;
-                    var codeslot = Parent.Compiler.CodeSlots[slot];
-
-                    if (codeslot == null)
-                        continue;
-                    
-                    block.Inlines.Add(new Run
-                    {
-                        Text = codeslot + " " + (count > 80 ? Environment.NewLine : string.Empty),
-                        Background = current ? Brushes.LightGray : Brushes.Transparent,
-                        ToolTip = $"{slot:X}"
-                    });
-
-                    count = count > 80 ? 0 : count + block.Inlines.OfType<Run>().Last().Text.Length;
-                }
-
-                return block;
-            }
-        }
+        public Visibility ShowAddress => Parent.ShowAddress.IsChecked ? Visibility.Visible : Visibility.Collapsed;
 
         public Brush Background => this.Contains(Parent.Cpu.ProgramSlot) ? Brushes.Yellow :
                                     TestResult == null ? Brushes.Transparent :
-                                    TestResult.StartsWith("FAIL") ? Brushes.LightPink : Brushes.LightGreen;
+                                    TestResult.StartsWith("PASS") ? Brushes.LightGreen : Brushes.LightPink;
 
 
         public void Refresh()

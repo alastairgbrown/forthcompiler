@@ -10,16 +10,15 @@
         <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceItem}">
             <StackPanel Orientation="Horizontal" Background="{Binding Background}" ToolTip="{Binding Tooltip}">
                 <CheckBox IsChecked="{Binding Break}" MinWidth="10"/>
-                <Label Content="{Binding Text}" MinWidth="400" Padding="0"/>
-                <Label Content="{Binding Address}" MinWidth="50" Padding="0"/>
-                <Label Content="{Binding Code}" MinWidth="400" Padding="0"/>
+                <Label Content="{Binding Address}" MinWidth="50" Padding="0" Visibility="{Binding ShowAddress}"/>
+                <Label Content="{Binding Text}" MinWidth="1000" Padding="0"/>
             </StackPanel>
         </DataTemplate>
         <DataTemplate x:Key="HeapItemTemplate" DataType="{x:Type local:HeapItem}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding Name}" MinWidth="80" Foreground="Magenta"/>
-                <TextBlock Text="{Binding Address}" MinWidth="20"/>
-                <TextBlock Text="{Binding Value}" MinWidth="20" Foreground="{Binding Foreground}"/>
+                <TextBlock Text="{Binding Address}" MinWidth="40"/>
+                <TextBlock Text="{Binding Value}" MinWidth="40" Foreground="{Binding Foreground}"/>
             </StackPanel>
         </DataTemplate>
     </Window.Resources>
@@ -30,7 +29,7 @@
             <RowDefinition Height="248*" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="130" />
+            <ColumnDefinition Width="180" />
             <ColumnDefinition Width="55*"/>
         </Grid.ColumnDefinitions>
         <Menu x:Name="ToolBar" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2">
@@ -39,9 +38,19 @@
             <MenuItem x:Name="StepAsmButton" Header="Step _ASM" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepAsmButton_Click" />
             <MenuItem x:Name="StepTokenButton" Header="Step _Token" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepTokenButton_Click" />
             <MenuItem x:Name="StepLineButton" Header="Step _Line" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepLineButton_Click" />
-            <MenuItem x:Name="CheckTestButton" Header="_Check Test" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="CheckTestButton_Click" />
+            <MenuItem x:Name="RunTestsButton" Header="Run Tests" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RunTestsButton_Click" />
             <MenuItem x:Name="SetPc" Header="Set PC" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="SetPc_Click" />
-            <MenuItem x:Name="HideShowMacro" Header="Hide/Show Macro" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="HideShowMacro_Click"  />
+            <MenuItem x:Name="View" Header="View" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"  >
+                <MenuItem x:Name="MacroLevel0" Header="Hide Macros" HorizontalAlignment="Left" Click="MacroLevel_Click" IsChecked="True"/>
+                <MenuItem x:Name="MacroLevel1" Header="Macro Level 1" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
+                <MenuItem x:Name="MacroLevel2" Header="Macro Level 2" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
+                <MenuItem x:Name="MacroLevel3" Header="Macro Level 3" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
+                <MenuItem x:Name="MacroLevel4" Header="Macro Level 4" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
+                <MenuItem x:Name="MacroLevel5" Header="Macro Level 5" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
+                <Separator HorizontalAlignment="Left" Height="1" Width="159"/>
+                <MenuItem x:Name="ShowAsm" Header="Show ASM" HorizontalAlignment="Left" IsCheckable="True" Click="Show_Click"/>
+                <MenuItem x:Name="ShowAddress" Header="Show Address" HorizontalAlignment="Left" IsCheckable="True" Click="Show_Click"/>
+            </MenuItem>
         </Menu>
         <Label x:Name="CpuLabel" Content="Label" Height="40" VerticalAlignment="Top" FontFamily="Consolas"  Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Grid.RowSpan="2"/>
         <ListBox x:Name="HeapListBox" ItemTemplate="{DynamicResource HeapItemTemplate}" Grid.Row="2" Grid.Column="0"/>

@@ -47,11 +47,10 @@ namespace ForthCompiler
         }
         public static void Add(this Dictionary<string, IDictEntry> dict, string testcode, string expectedvalue)
         {
-            var index = dict.Values.OfType<TestCase>().Count() + 1;
             var func = dict.Last(d => !(d.Value is TestCase)).Key;
-            var count = Regex.Matches(expectedvalue, @"\S+").Count * 2 + 2;
+            var count = Regex.Matches(expectedvalue, @"\S+").Count;
 
-            dict.Add($"( {index} {func} ) {count} {index} ( ) {testcode} ( = ) {expectedvalue}", new TestCase());
+            dict.Add($"( {func} ) {count} ( ) {testcode} ( = ) {expectedvalue}", new TestCase());
         }
     }
 }
