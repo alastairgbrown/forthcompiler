@@ -55,6 +55,7 @@
     <Compile Include="DebugWindow.xaml.cs">
       <DependentUpon>DebugWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="HeapItem.cs" />
     <Compile Include="IDictEntry.cs" />
     <Compile Include="ExtensionMethods.cs" />
     <Compile Include="LabelEntry.cs" />
@@ -62,7 +63,9 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SourceItem.cs" />
     <Compile Include="Token.cs" />
+    <Compile Include="UiItem.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

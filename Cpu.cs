@@ -35,8 +35,9 @@ namespace ForthCompiler
             $"Top={_top} ",
             $"Next={_next} ",
             $"Carry={_carry} ",
-            $"{_error}{Environment.NewLine}",
-            $"Stack=",
+            $"{_error}",
+            Environment.NewLine,
+            "Stack=",
         }.Concat(ForthStack.Reverse().Select(i => $"{i} "));
 
         void Step()

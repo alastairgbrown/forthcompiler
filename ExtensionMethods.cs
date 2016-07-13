@@ -45,12 +45,19 @@ namespace ForthCompiler
         {
             dict.Add(name, new MacroText { TokenType = tokenType, Text = macrotext });
         }
-        public static void Add(this Dictionary<string, IDictEntry> dict, string testcode, string expectedvalue)
+        public static void Add(this Dictionary<string, IDictEntry> dict, string testcode, string expectedvalues)
         {
             var func = dict.Last(d => !(d.Value is TestCase)).Key;
-            var count = Regex.Matches(expectedvalue, @"\S+").Count;
+            var count = Regex.Matches(expectedvalues, @"\S+").Count;
 
-            dict.Add($"( {func} ) {count} ( ) {testcode} ( = ) {expectedvalue}", new TestCase());
+            dict.Add($"( {func} ) {testcode} ( = ) {expectedvalues} ( ) {count}", new TestCase());
+        }
+
+        public static void Add(this Dictionary<string, IDictEntry> dict, string prerequisite)
+        {
+            var func = dict.Last(d => !(d.Value is TestCase)).Key;
+
+            dict.Add($"{prerequisite} {func}", new Prerequisite {Text = prerequisite, For = func});
         }
     }
 }

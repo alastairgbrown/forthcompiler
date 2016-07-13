@@ -7,14 +7,14 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="342.279" Width="766.912">
     <Window.Resources>
-        <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceItem}">
+        <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceUiItem}">
             <StackPanel Orientation="Horizontal" Background="{Binding Background}" ToolTip="{Binding Tooltip}">
                 <CheckBox IsChecked="{Binding Break}" MinWidth="10"/>
                 <Label Content="{Binding Address}" MinWidth="50" Padding="0" Visibility="{Binding ShowAddress}"/>
                 <Label Content="{Binding Text}" MinWidth="1000" Padding="0"/>
             </StackPanel>
         </DataTemplate>
-        <DataTemplate x:Key="HeapItemTemplate" DataType="{x:Type local:HeapItem}">
+        <DataTemplate x:Key="HeapItemTemplate" DataType="{x:Type local:HeapUiItem}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding Name}" MinWidth="80" Foreground="Magenta"/>
                 <TextBlock Text="{Binding Address}" MinWidth="40"/>

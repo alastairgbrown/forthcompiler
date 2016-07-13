@@ -1,14 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Linq;
-using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
-using ForthCompiler.Annotations;
 
 namespace ForthCompiler
 {
@@ -24,8 +21,8 @@ namespace ForthCompiler
 
         public Cpu Cpu { get; set; }
 
-        private ObservableCollection<SourceItem> SourceItems { get; } = new ObservableCollection<SourceItem>();
-        private ObservableCollection<HeapItem> HeapItems { get; } = new ObservableCollection<HeapItem>();
+        private ObservableCollection<SourceUiItem> SourceItems { get; } = new ObservableCollection<SourceUiItem>();
+        private ObservableCollection<HeapUiItem> HeapItems { get; } = new ObservableCollection<HeapUiItem>();
 
         public DebugWindow(Compiler compiler, bool test)
         {
@@ -41,7 +38,7 @@ namespace ForthCompiler
 
             for (int i = 0; i < Compiler.HeapSize; i++)
             {
-                HeapItems.Add(new HeapItem { Address = i, Parent = this, Name = compiler.Dict.FirstOrDefault(t => (t.Value as VariableEntry)?.HeapAddress == i).Key });
+                HeapItems.Add(new HeapUiItem { Address = i, Parent = this, Name = compiler.Dict.FirstOrDefault(t => (t.Value as VariableEntry)?.HeapAddress == i).Key });
             }
 
             HeapListBox.ItemsSource = HeapItems;
@@ -76,7 +73,7 @@ namespace ForthCompiler
 
                 if (i == 0 || Compiler.Tokens[i - 1].File != token.File || Compiler.Tokens[i - 1].Y != token.Y)
                 {
-                    SourceItems.Add(new SourceItem { Parent = this });
+                    SourceItems.Add(new SourceUiItem { Parent = this });
                 }
 
                 if (token.MacroLevel > _macroLevel)
@@ -90,7 +87,7 @@ namespace ForthCompiler
             }
         }
 
-        private void Refresh(Func<SourceItem, bool> refreshSource, Func<HeapItem, bool> refreshHeap)
+        private void Refresh(Func<SourceUiItem, bool> refreshSource, Func<HeapUiItem, bool> refreshHeap)
         {
             var lastState = Cpu.LastState ?? Cpu.ThisState.ToArray();
             var thisState = Cpu.ThisState.ToArray();
@@ -119,13 +116,11 @@ namespace ForthCompiler
 
         private void Run(Func<int, bool?> continueCondition)
         {
-            var linebefore = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+            var start = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
 
             Cpu.Run(continueCondition);
 
-            var lineafter = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
-
-            Refresh(si => si == linebefore || si == lineafter, hi => hi.IsChanged);
+            Refresh(si => si == start || si.Contains(Cpu.ProgramSlot), hi => hi.IsChanged);
         }
 
 
@@ -172,19 +167,20 @@ namespace ForthCompiler
                 Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeSlot };
                 Cpu.Run(i => test.Contains(Cpu.ProgramSlot));
 
-                var stack = Cpu.ForthStack.Reverse().ToArray();
+                var stack = Cpu.ForthStack.ToArray();
                 var result = "FAIL";
 
-                if (stack.Length > 0 && stack.Length == 1 + stack.First() * 2)
+                if (stack.Length == 0 || stack.Length < 1 + stack.First())
                 {
-                    var actual = string.Join(" ", stack.Skip(1).Take(stack.First()));
-                    var expected = string.Join(" ", stack.Skip(1 + stack.First()).Take(stack.First()));
-                    result = actual == expected ? "PASS" : "FAIL";
-                    test.TestResult = $"{result} expected={expected} actual={actual}";
+                    test.TestResult = $"{result} stack={string.Join(" ", stack)}";
                 }
                 else
                 {
-                    test.TestResult = $"{result} stack={string.Join(" ", stack)}";
+                    var actual = string.Join(" ", stack.Skip(1 + stack.First()).Reverse());
+                    var expected = string.Join(" ", stack.Skip(1).Take(stack.First()).Reverse());
+
+                    result = actual == expected ? "PASS" : "FAIL";
+                    test.TestResult = $"{result} expected={expected} actual={actual}";
                 }
 
                 results[result]++;
@@ -201,7 +197,7 @@ namespace ForthCompiler
 
         private void SetPc_Click(object sender, RoutedEventArgs e)
         {
-            var item = SourceListBox.SelectedItem as SourceItem;
+            var item = SourceListBox.SelectedItem as SourceUiItem;
 
             if (item != null)
             {
@@ -227,122 +223,5 @@ namespace ForthCompiler
             LoadSource();
             Refresh(si => true, hi => true);
         }
-    }
-
-    public class Item : INotifyPropertyChanged
-    {
-        public DebugWindow Parent { get; set; }
-
-        public event PropertyChangedEventHandler PropertyChanged;
-
-        [NotifyPropertyChangedInvocator]
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-    }
-
-    public class HeapItem : Item
-    {
-        public string Name { get; set; }
-
-        public int Address { get; set; }
-
-        public int Value => Parent.Cpu.Heap[Address];
-
-        public Brush Foreground => IsChanged ? Brushes.Red : Brushes.Black;
-
-        public bool IsChanged => Parent.Cpu.Heap[Address] != Parent.Cpu.LastHeap[Address];
-
-        public void Refresh()
-        {
-            OnPropertyChanged(nameof(Value));
-            OnPropertyChanged(nameof(Foreground));
-        }
-    }
-
-    public class SourceItem : Item, ISlotRange
-    {
-        private static readonly Dictionary<TokenType, Brush> TokenColors = new Dictionary<TokenType, Brush>
-            {
-                {TokenType.Undetermined, Brushes.Black},
-                {TokenType.Organisation, Brushes.Black},
-                {TokenType.Excluded, Brushes.Green},
-                {TokenType.Literal, Brushes.Black},
-                {TokenType.Math, Brushes.Black},
-                {TokenType.Stack, Brushes.Black},
-                {TokenType.Structure, Brushes.Blue},
-                {TokenType.Variable, Brushes.Magenta},
-                {TokenType.Constant, Brushes.Black},
-                {TokenType.Definition, Brushes.Black},
-                {TokenType.Label, Brushes.Black},
-                {TokenType.Error, Brushes.Red},
-            };
-
-        public bool Break { get; set; }
-
-        public TextBlock Text
-        {
-            get
-            {
-                var block = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 1000, MinWidth = 1000 };
-
-                foreach (var token in Tokens)
-                {
-                    bool current = token.Contains(Parent.Cpu.ProgramSlot);
-
-                    block.Inlines.Add(new Run
-                    {
-                        Text = token.Text,
-                        Foreground = TokenColors[token.TokenType],
-                        Background = current ? Brushes.LightGray : Brushes.Transparent,
-                    });
-
-                    for (int i = 0, slot = token.CodeSlot; Parent.ShowAsm.IsChecked && i < token.CodeCount; i++, slot++)
-                    {
-                        var codeslot = Parent.Compiler.CodeSlots[slot];
-
-                        if (codeslot == null)
-                            continue;
-
-                        current = Parent.Cpu.ProgramSlot == slot;
-
-                        block.Inlines.Add(new Run
-                        {
-                            Text = $" {codeslot}",
-                            Background = current ? Brushes.LightGray : Brushes.Transparent,
-                            ToolTip = $"{slot:X}"
-                        });
-                    }
-                }
-
-                return block;
-            }
-        }
-
-        public string Address => $"{Tokens.First().CodeSlot:X}";
-        public Visibility ShowAddress => Parent.ShowAddress.IsChecked ? Visibility.Visible : Visibility.Collapsed;
-
-        public Brush Background => this.Contains(Parent.Cpu.ProgramSlot) ? Brushes.Yellow :
-                                    TestResult == null ? Brushes.Transparent :
-                                    TestResult.StartsWith("PASS") ? Brushes.LightGreen : Brushes.LightPink;
-
-
-        public void Refresh()
-        {
-            OnPropertyChanged(nameof(Text));
-            OnPropertyChanged(nameof(Code));
-            OnPropertyChanged(nameof(Background));
-            OnPropertyChanged(nameof(Tooltip));
-        }
-
-        public string Tooltip => TestResult;
-
-        public string TestResult { get; set; }
-
-        public Compiler Compiler => Parent.Compiler;
-        public List<Token> Tokens = new List<Token>();
-        public int CodeSlot => Tokens.First().CodeSlot;
-        public int CodeCount => Tokens.Last().CodeSlot - Tokens.First().CodeSlot + Tokens.Last().CodeCount;
     }
 }
