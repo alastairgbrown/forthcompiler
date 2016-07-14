@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -14,6 +13,8 @@ namespace ForthCompiler
     public class Compiler
     {
         public List<Token> Tokens { get; } = new List<Token>();
+
+        public Token Token => _tokenIndex < Tokens.Count ? Tokens[_tokenIndex] : null;
 
         public List<CodeSlot> CodeSlots { get; } = new List<CodeSlot>();
 
@@ -207,6 +208,39 @@ namespace ForthCompiler
             }
         }
 
+        public IEnumerable<string> MakeMif()
+        {
+            var depth = CodeSlots.Count / 8;
+
+            yield return $"DEPTH = {depth}; --The size of memory in words";
+            yield return "WIDTH = 32; --The size of data in bits";
+            yield return "ADDRESS_RADIX = HEX; --The radix for address values";
+            yield return "DATA_RADIX = HEX; --The radix for data values";
+            yield return "CONTENT-- start of(address: data pairs)";
+            yield return "BEGIN";
+            yield return "";
+
+            for (var index = 0; index < depth; index++)
+            {
+                int code = 0, start = index * 8;
+
+                foreach (int i in Enumerable.Range(0, 8))
+                {
+                    code += ((int)CodeSlots[start + i].Code) << (i * 4);
+                }
+
+                yield return $"{index:X4} : {code:X8};";
+
+                foreach (int i in Enumerable.Range(0, 8).Where(i => CodeSlots[start + i].Code == Code.Lit))
+                {
+                    yield return $"{++index:X4} : {CodeSlots[start + i].Value:X8};";
+                }
+            }
+
+            yield return "";
+            yield return "END";
+        }
+
         T MakeDictEntry<T>(string key, Func<T> createFunc, bool exclusive = false) where T : IDictEntry
         {
             IDictEntry entry;
@@ -230,8 +264,6 @@ namespace ForthCompiler
         {
             ReadFile(_tokenIndex + 1, Token.File, y => Token.Y, y => Token.X, new[] { $" {macro}" }, Token.MacroLevel + 1);
         }
-
-        public Token Token => _tokenIndex < Tokens.Count ? Tokens[_tokenIndex] : null;
 
         public void Encode(params Code[] codes)
         {
@@ -277,7 +309,7 @@ namespace ForthCompiler
                     {
                         Encode(Code.Psh);
                         Encode(Code.Lit, Convert.ToInt32(
-                                            Token.Text.Trim('$','#','%'), 
+                                            Token.Text.Trim('$', '#', '%'),
                                             Token.Text.StartsWith("$") ? 16 : Token.Text.StartsWith("%") ? 2 : 10));
                     }
                     else if (Token.TokenType != TokenType.Excluded)
@@ -297,6 +329,11 @@ namespace ForthCompiler
                 Error = $"Error: {ex.Message}{Environment.NewLine}File: {Token?.File}({Token?.Y + 1},{Token?.X + 1})";
                 Console.WriteLine(Error);
                 Tokens.Skip(_tokenIndex).ToList().ForEach(t => t.SetError());
+            }
+
+            while (CodeSlots.Count % 8 != 0)
+            {
+                Encode(Code._);
             }
 
             for (int i = 0, slot = 0; i < Tokens.Count; i++)
@@ -418,7 +455,7 @@ namespace ForthCompiler
         {
             var label = MakeDictEntry(Token.Text, () => new LabelEntry());
 
-            while (CodeSlots.Count % 8 > 0)
+            while (CodeSlots.Count % 8 != 0)
             {
                 Encode(Code._);
             }
@@ -442,7 +479,7 @@ namespace ForthCompiler
         [Method(null, TokenType.Organisation, HasArgument = true)]
         private void Variable(object dictEntry)
         {
-            Token.DictEntry = MakeDictEntry(Token.Text, () => new VariableEntry {HeapAddress = HeapSize++}, Token.MacroLevel == 0);
+            Token.DictEntry = MakeDictEntry(Token.Text, () => new VariableEntry { HeapAddress = HeapSize++ }, Token.MacroLevel == 0);
         }
 
         [Method(null, TokenType.Organisation)]
@@ -477,8 +514,9 @@ namespace ForthCompiler
         [Method(null, TokenType.Structure)]
         private void If(object dictEntry)
         {
-            Macro($"0= addr {Token} and /jnz");
             _structureStack.Push(Token);
+
+            Macro($"0= addr {Token} and /jnz");
         }
 
         [Method(null, TokenType.Structure)]
@@ -594,18 +632,16 @@ namespace ForthCompiler
 
         }
 
-        [Method(null, TokenType.Structure)]
+        [Method(null, TokenType.Structure), Prerequisite("_ReturnStackCode_")]
         private void Case(object dictEntry)
         {
             _structureStack.Push(Token);
-            Macro($"_take1_");
+            Macro("_Take1_");
         }
 
         [Method(null, TokenType.Structure)]
         private void Of(object dictEntry)
         {
-            var caseToken = _structureStack.SkipWhile(s => s.MethodName != nameof(Case)).First();
-
             _structureStack.Push(Token);
             Macro($"_R1_ @ <> addr {Token} and /jnz");
         }
@@ -776,6 +812,11 @@ namespace ForthCompiler
     {
         public Code Code { get; set; }
         public int Value { get; set; }
+
+        public override string ToString()
+        {
+            return $"{Code}{(Code == Code.Lit ? " " + Value : "")}";
+        }
     }
 
     public enum DictType

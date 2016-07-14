@@ -85,7 +85,7 @@ namespace ForthCompiler
                                  .Where(i => args[i].StartsWith("-"))
                                  .ToDictionary(i => args[i], i => i + 1 < args.Length ? args[i + 1] : null, StringComparer.OrdinalIgnoreCase);
                 var test = argMap.ContainsKey("-test") || args.Length == 0;
-                var debug = argMap.ContainsKey("-debug") || args.Length == 0 || true;
+                var debug = argMap.ContainsKey("-debug") || args.Length == 0;
                 var compiler = new Compiler();
 
                 if (argMap.ContainsKey("-f"))
@@ -100,12 +100,18 @@ namespace ForthCompiler
 
                 compiler.Parse();
 
+                if (argMap.ContainsKey("-mif"))
+                {
+                    File.WriteAllLines(argMap["-mif"], compiler.MakeMif());
+                    Console.WriteLine($"Generated: {argMap["-mif"]}");
+                }
+
                 if (debug)
                 {
                     new DebugWindow(compiler, test).ShowDialog();
                 }
             }
-            catch (Exception ex)
+            catch (NotSupportedException ex)
             {
                 Console.WriteLine($"Exception: {ex.Message}");
             }
