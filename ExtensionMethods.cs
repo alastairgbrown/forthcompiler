@@ -37,27 +37,26 @@ namespace ForthCompiler
             return slot >= token.CodeSlot && slot < token.CodeSlot + token.CodeCount;
         }
 
-        public static void Add(this Dictionary<string, IDictEntry> dict, TokenType tokenType, string name, params Code[] codes)
+        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, TokenType tokenType, string name, params Code[] codes)
         {
-            dict.Add(name, new MacroCode { TokenType = tokenType, Codes = codes });
+            dict[DictType.Dict].Add(name, new MacroCode { TokenType = tokenType, Codes = codes });
         }
-        public static void Add(this Dictionary<string, IDictEntry> dict, TokenType tokenType, string name, string macrotext)
+        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, TokenType tokenType, string name, string macrotext)
         {
-            dict.Add(name, new MacroText { TokenType = tokenType, Text = macrotext });
+            dict[DictType.Dict].Add(name, new MacroText { TokenType = tokenType, Text = macrotext });
         }
-        public static void Add(this Dictionary<string, IDictEntry> dict, string testcode, string expectedvalues)
+        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, TestCase testcase)
         {
-            var func = dict.Last(d => !(d.Value is TestCase)).Key;
-            var count = Regex.Matches(expectedvalues, @"\S+").Count;
+            var func = dict[DictType.Dict].Last().Key;
 
-            dict.Add($"( {func} ) {testcode} ( = ) {expectedvalues} ( ) {count}", new TestCase());
+            dict[DictType.TestCase].Add($"{nameof(Compiler.TestCase)} {func} {testcase.Text}", testcase);
         }
 
-        public static void Add(this Dictionary<string, IDictEntry> dict, string prerequisite)
+        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, Prerequisite prerequisite)
         {
-            var func = dict.Last(d => !(d.Value is TestCase)).Key;
+            var func = dict[DictType.Dict].Last().Key;
 
-            dict.Add($"{prerequisite} {func}", new Prerequisite {Text = prerequisite, For = func});
+            dict[DictType.PreComp].Add(func, prerequisite);
         }
     }
 }

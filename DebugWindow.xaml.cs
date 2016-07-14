@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace ForthCompiler
 {
@@ -15,34 +16,42 @@ namespace ForthCompiler
     public partial class DebugWindow
     {
         private readonly bool _test;
-        private int[] _originalCodeCounts;
-        private int _macroLevel;
+
+        public int MacroLevel { get; private set; }
         public Compiler Compiler { get; }
 
         public Cpu Cpu { get; set; }
 
-        private ObservableCollection<SourceUiItem> SourceItems { get; } = new ObservableCollection<SourceUiItem>();
-        private ObservableCollection<HeapUiItem> HeapItems { get; } = new ObservableCollection<HeapUiItem>();
+        private ObservableCollection<SourceItem> SourceItems { get; } = new ObservableCollection<SourceItem>();
+        private ObservableCollection<HeapItem> HeapItems { get; } = new ObservableCollection<HeapItem>();
 
         public DebugWindow(Compiler compiler, bool test)
         {
             InitializeComponent();
 
             _test = test;
-            _originalCodeCounts = compiler.Tokens.Select(t => t.CodeCount).ToArray();
 
             Compiler = compiler;
 
-
-            LoadSource();
-
             for (int i = 0; i < Compiler.HeapSize; i++)
             {
-                HeapItems.Add(new HeapUiItem { Address = i, Parent = this, Name = compiler.Dict.FirstOrDefault(t => (t.Value as VariableEntry)?.HeapAddress == i).Key });
+                HeapItems.Add(new HeapItem { Address = i, Parent = this, Name = compiler.Dict.FirstOrDefault(t => (t.Value as VariableEntry)?.HeapAddress == i).Key });
             }
 
             HeapListBox.ItemsSource = HeapItems;
             SourceListBox.ItemsSource = SourceItems;
+
+            for (int i = 0; i < Compiler.Tokens.Count; i++)
+            {
+                var token = Compiler.Tokens[i];
+
+                if (i == 0 || Compiler.Tokens[i - 1].File != token.File || Compiler.Tokens[i - 1].Y != token.Y)
+                {
+                    SourceItems.Add(new SourceItem { Parent = this });
+                }
+
+                SourceItems.Last().Tokens.Add(token);
+            }
 
             RestartButton_Click(null, null);
 
@@ -50,44 +59,17 @@ namespace ForthCompiler
             {
                 var textBlock = new TextBlock();
 
-                textBlock.Inlines.Add(new Run { Text = $"{Compiler.Error}", Foreground = Brushes.Red });
+                textBlock.Inlines.Add(new Run { Text = Compiler.Error, Foreground = Brushes.Red });
 
                 CpuLabel.Content = textBlock;
-
             }
             else if (test)
             {
-                //RunButton_Click(null, null);
-                //CheckTestButton_Click(null, null);
+                RunTestsButton_Click(null, null);
             }
         }
 
-        private void LoadSource()
-        {
-            SourceItems.Clear();
-            for (int i = 0; i < Compiler.Tokens.Count; i++)
-            {
-                var token = Compiler.Tokens[i];
-
-                token.CodeCount = _originalCodeCounts[i];
-
-                if (i == 0 || Compiler.Tokens[i - 1].File != token.File || Compiler.Tokens[i - 1].Y != token.Y)
-                {
-                    SourceItems.Add(new SourceUiItem { Parent = this });
-                }
-
-                if (token.MacroLevel > _macroLevel)
-                {
-                    SourceItems.Last().Tokens.Last().CodeCount += token.CodeCount;
-                }
-                else
-                {
-                    SourceItems.Last().Tokens.Add(token);
-                }
-            }
-        }
-
-        private void Refresh(Func<SourceUiItem, bool> refreshSource, Func<HeapUiItem, bool> refreshHeap)
+        private void Refresh(Func<SourceItem, bool> refreshSource, Func<HeapItem, bool> refreshHeap)
         {
             var lastState = Cpu.LastState ?? Cpu.ThisState.ToArray();
             var thisState = Cpu.ThisState.ToArray();
@@ -112,6 +94,11 @@ namespace ForthCompiler
             {
                 item.Refresh();
             }
+        }
+
+        public string Formatter(int i)
+        {
+            return ShowHex.IsChecked ? $"{i:X}" : $"{i}";
         }
 
         private void Run(Func<int, bool?> continueCondition)
@@ -152,8 +139,9 @@ namespace ForthCompiler
 
         private void RestartButton_Click(object sender, RoutedEventArgs e)
         {
-            Cpu = new Cpu(Compiler);
+            Cpu = new Cpu(Compiler) { Formatter = Formatter };
 
+            SourceItems.ToList().ForEach(si => si.TestResult = null);
             Refresh(si => true, hi => true);
         }
 
@@ -162,10 +150,10 @@ namespace ForthCompiler
             var tests = SourceItems.Any(si => si.Break) ? SourceItems.Where(si => si.Break).ToArray() : SourceItems.ToArray();
             var results = new Dictionary<string, int> { { "PASS", 0 }, { "FAIL", 0 } };
 
-            foreach (var test in tests)
+            foreach (var test in tests.Where(t => t.Tokens.First().TokenType == TokenType.TestCase))
             {
                 Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeSlot };
-                Cpu.Run(i => test.Contains(Cpu.ProgramSlot));
+                Cpu.Run(i => Cpu.ProgramSlot < test.CodeSlot + test.CodeCount);
 
                 var stack = Cpu.ForthStack.ToArray();
                 var result = "FAIL";
@@ -197,7 +185,7 @@ namespace ForthCompiler
 
         private void SetPc_Click(object sender, RoutedEventArgs e)
         {
-            var item = SourceListBox.SelectedItem as SourceUiItem;
+            var item = SourceListBox.SelectedItem as SourceItem;
 
             if (item != null)
             {
@@ -209,7 +197,6 @@ namespace ForthCompiler
 
         private void Show_Click(object sender, RoutedEventArgs e)
         {
-            LoadSource();
             Refresh(si => true, hi => true);
         }
 
@@ -217,10 +204,9 @@ namespace ForthCompiler
         {
             var menuItems = View.Items.OfType<Control>().TakeWhile(c => c is MenuItem).OfType<MenuItem>().ToList();
 
-            _macroLevel = menuItems.IndexOf((MenuItem)sender);
+            MacroLevel = menuItems.IndexOf((MenuItem)sender);
             menuItems.ForEach(mi => mi.IsChecked = ReferenceEquals(mi, sender));
 
-            LoadSource();
             Refresh(si => true, hi => true);
         }
     }

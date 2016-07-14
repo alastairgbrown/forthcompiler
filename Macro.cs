@@ -1,22 +1,33 @@
-using System.Collections.Generic;
-using System.Reflection;
-
 namespace ForthCompiler
 {
     public abstract class Macro : IDictEntry
     {
-        public abstract MethodInfo Method { get; }
+        public abstract void Process(Compiler compiler);
+
         public TokenType TokenType { get; set; }
     }
 
     public class MacroCode : Macro
     {
-        public override MethodInfo Method => typeof(Compiler).GetMethod(nameof(Compiler.MacroCode));
         public Code[] Codes { get; set; }
+
+        public override void Process(Compiler compiler)
+        {
+            compiler.Encode(Codes);
+        }
     }
+
     public class MacroText : Macro
     {
-        public override MethodInfo Method => typeof(Compiler).GetMethod(nameof(Compiler.MacroText));
         public string Text { get; set; }
+        public override string ToString()
+        {
+            return Text;
+        }
+
+        public override void Process(Compiler compiler)
+        {
+            compiler.Macro(Text);
+        }
     }
 }

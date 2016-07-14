@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
@@ -77,32 +78,37 @@ namespace ForthCompiler
         [STAThread]
         private static void Main(string[] args)
         {
-            args = args.Length > 0 ? args : new[] { "-test", "-debug" };
-
-            var argMap = args.Select((a, i) => new { a, i })
-                             .Where(a => a.a.StartsWith("-"))
-                             .ToDictionary(a => a.a, a => args[Math.Min(args.Length - 1, a.i + 1)], StringComparer.OrdinalIgnoreCase);
-            var test = argMap.ContainsKey("-test");
-            var compiler = new Compiler();
-
-            if (argMap.ContainsKey("-f"))
+            try
             {
-                compiler.ReadFile(0, argMap["-f"], y => y + 1, x => x, File.ReadAllLines(argMap["-f"]));
+
+                var argMap = Enumerable.Range(0, args.Length)
+                                 .Where(i => args[i].StartsWith("-"))
+                                 .ToDictionary(i => args[i], i => i + 1 < args.Length ? args[i + 1] : null, StringComparer.OrdinalIgnoreCase);
+                var test = argMap.ContainsKey("-test") || args.Length == 0;
+                var debug = argMap.ContainsKey("-debug") || args.Length == 0;
+                var compiler = new Compiler();
+
+                if (argMap.ContainsKey("-f"))
+                {
+                    compiler.ReadFile(0, argMap["-f"], y => y + 1, x => x, File.ReadAllLines(argMap["-f"]));
+                }
+                else if (test)
+                {
+                    var lines = compiler.Entries[DictType.TestCase].Keys.ToArray();
+                    compiler.ReadFile(0, "Test Cases", y => y, x => x, lines);
+                }
+
+                compiler.Parse();
+
+                if (debug)
+                {
+                    new DebugWindow(compiler, test).ShowDialog();
+                }
             }
-            else if (test)
+            catch (Exception ex)
             {
-                var lines = compiler.Dict.Where(i => i.Value is TestCase).Select(i => i.Key).ToArray();
-                compiler.ReadFile(0, "Test Cases", y => y + 1, x => x, lines);
+                Console.WriteLine($"Exception: {ex.Message}");
             }
-
-            compiler.Parse();
-
-            var debugger = new DebugWindow(compiler, test);
-
-            debugger.ShowDialog();
-        }
-        private void TestCases()
-        {
         }
     }
 

@@ -1,10 +1,8 @@
-using System.Reflection;
-
 namespace ForthCompiler
 {
     public interface IDictEntry
     {
-        MethodInfo Method { get; }
+        void Process(Compiler compiler);
 
         TokenType TokenType { get; }
     }

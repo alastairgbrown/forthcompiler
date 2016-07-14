@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 
 namespace ForthCompiler
 {
     public class LabelEntry : IDictEntry
     {
-        public MethodInfo Method => null;
+        public void Process(Compiler compiler)
+        {
+            throw new NotImplementedException();
+        }
+
         public TokenType TokenType => TokenType.Label;
         public List<int> Patches { get; set; }
         public int CodeSlot { get; set; }

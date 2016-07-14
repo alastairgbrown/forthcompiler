@@ -18,8 +18,8 @@ namespace ForthCompiler
         private bool _carry;
         private string _error;
         public string[] LastState { get; private set; }
-
         private CodeSlot[] _codeslots;
+        public Func<int, string> Formatter { get; set; } = i => $"{i}";
 
         public Cpu(Compiler compiler)
         {
@@ -30,21 +30,21 @@ namespace ForthCompiler
 
         public IEnumerable<string> ThisState => new[]
         {
-            $"PS={ProgramSlot:X} ",
-            $"SP={Stack.Count} ",
-            $"Top={_top} ",
-            $"Next={_next} ",
+            $"PS={Formatter(ProgramSlot)} ",
+            $"SP={Formatter(Stack.Count)} ",
+            $"Top={Formatter(_top)} ",
+            $"Next={Formatter(_next)} ",
             $"Carry={_carry} ",
             $"{_error}",
             Environment.NewLine,
             "Stack=",
-        }.Concat(ForthStack.Reverse().Select(i => $"{i} "));
+        }.Concat(ForthStack.Reverse().Select(i => $"{Formatter(i)} "));
 
         void Step()
         {
             if (ProgramSlot < 0 || ProgramSlot >= _codeslots.Length)
             {
-                throw new Exception($"Outside executable code {ProgramSlot}");
+                throw new Exception($"Outside executable code {Formatter(ProgramSlot)}");
             }
 
             var code = _codeslots[ProgramSlot++];

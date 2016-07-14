@@ -7,17 +7,17 @@
         mc:Ignorable="d"
         Title="MainWindow" Height="342.279" Width="766.912">
     <Window.Resources>
-        <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceUiItem}">
+        <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceItem}">
             <StackPanel Orientation="Horizontal" Background="{Binding Background}" ToolTip="{Binding Tooltip}">
                 <CheckBox IsChecked="{Binding Break}" MinWidth="10"/>
                 <Label Content="{Binding Address}" MinWidth="50" Padding="0" Visibility="{Binding ShowAddress}"/>
                 <Label Content="{Binding Text}" MinWidth="1000" Padding="0"/>
             </StackPanel>
         </DataTemplate>
-        <DataTemplate x:Key="HeapItemTemplate" DataType="{x:Type local:HeapUiItem}">
+        <DataTemplate x:Key="HeapItemTemplate" DataType="{x:Type local:HeapItem}">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="{Binding Name}" MinWidth="80" Foreground="Magenta"/>
-                <TextBlock Text="{Binding Address}" MinWidth="40"/>
+                <TextBlock Text="{Binding AddressFormatted}" MinWidth="40"/>
                 <TextBlock Text="{Binding Value}" MinWidth="40" Foreground="{Binding Foreground}"/>
             </StackPanel>
         </DataTemplate>
@@ -50,6 +50,7 @@
                 <Separator HorizontalAlignment="Left" Height="1" Width="159"/>
                 <MenuItem x:Name="ShowAsm" Header="Show ASM" HorizontalAlignment="Left" IsCheckable="True" Click="Show_Click"/>
                 <MenuItem x:Name="ShowAddress" Header="Show Address" HorizontalAlignment="Left" IsCheckable="True" Click="Show_Click"/>
+                <MenuItem x:Name="ShowHex" Header="Show Hex" HorizontalAlignment="Left" Width="160" IsCheckable="True" Click="Show_Click"/>
             </MenuItem>
         </Menu>
         <Label x:Name="CpuLabel" Content="Label" Height="40" VerticalAlignment="Top" FontFamily="Consolas"  Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Grid.RowSpan="2"/>
