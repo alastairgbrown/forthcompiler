@@ -657,7 +657,7 @@ namespace ForthCompiler
             NotImplementedException(null);
         }
 
-        [Method(":", TokenType.Definition, HasArgument = true)]
+        [Method(":", TokenType.Definition, HasArgument = true), Prerequisite("_ReturnStackCode_")]
         public void DefinitionStart(object dictEntry)
         {
             MakeDictEntry(Token.Text, () => new DefinitionEntry(), true);

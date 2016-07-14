@@ -1,11 +1,12 @@
 ﻿variable idx
-variable BLDC_BASE
+$100 constant BLDC_BASE
 
 ( this is a comment )
 
-100 BLDC_BASE !
-1 BLDC_BASE @ ! \ motor on
+: motor_on 1 BLDC_BASE ! ;
 
+
+motor_on
 1 idx !
 begin
    idx @ 10 <
@@ -18,3 +19,5 @@ idx 10 < if
 else
    111
 then
+
+$100 allot
