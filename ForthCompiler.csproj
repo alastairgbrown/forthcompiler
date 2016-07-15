@@ -58,7 +58,7 @@
     <Compile Include="HeapItem.cs" />
     <Compile Include="IDictEntry.cs" />
     <Compile Include="ExtensionMethods.cs" />
-    <Compile Include="LabelEntry.cs" />
+    <Compile Include="Label.cs" />
     <Compile Include="Macro.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\Annotations.cs" />

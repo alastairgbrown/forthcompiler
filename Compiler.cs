@@ -24,15 +24,6 @@ namespace ForthCompiler
                 {DictType.Dict, new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase)},
                 {DictType.TestCase, new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase)},
 
-                {TokenType.Organisation, "_ReturnStackCode_", "VARIABLE _RS_ 32 ALLOT _RS_ _RS_ ! VARIABLE _LOOP_RS_"},
-                {TokenType.Organisation, "_MulCode_", @": MulDefinition ( a b -- a*b )
-                                               0 _take3_
-                                               begin _R1_ @ 0<> while
-                                                 _R1_ @ 1 and 0<> if _R2_ @ _R3_ @ + _R3_ ! then
-                                                 _R2_ @ _R2_ @ + _R2_ !
-                                                 0 _R1_ @ /lsr /pop _R1_ !
-                                               repeat
-                                               _R3_ @ _drop3_ ;"},
                 {TokenType.Stack, "_R1_", "_RS_ @"},
                 {TokenType.Stack, "_R2_", "_RS_ @ 1 -"},
                 {TokenType.Stack, "_R3_", "_RS_ @ 2 -"},
@@ -46,13 +37,34 @@ namespace ForthCompiler
                 {TokenType.Stack, "_Drop3_", "_RS_ @ 3 - _RS_ !"},
                 {TokenType.Stack, "_Drop4_", "_RS_ @ 4 - _RS_ !"},
 
+                {TokenType.Organisation, "_ReturnStackCode_", "VARIABLE _RS_ 32 ALLOT _RS_ _RS_ ! VARIABLE _LOOP_RS_"},
+                {TokenType.Organisation, "_MulCode_",
+                    @": MulDefinition ( a b -- a*b )
+                        0 _take3_ ( _R1_ is factor1, _R1_ is factor2, _R3_ is product )
+                        begin _R1_ @ 0<> while
+                            _R1_ @ 1 and 0<> _R2_ @ and _R3_ @ + _R3_ ! ( add to the product )
+                            _R2_ @ _R2_ @ + _R2_ ! ( LSL factor2 )
+                            0 _R1_ @ /lsr /pop _R1_ ! ( LSR factor1 )
+                        repeat
+                        _R3_ @ _drop3_ ;" },
+                {TokenType.Organisation, "_PickCode_",
+                    @": PickDefinition (  xu .. x0 u -- xu .. x0 xu )
+                        1 + dup _RS_ @ + _RS_ !  _Take1_ ( allocate xu+2 items on the return stack )
+                        _R1_ @ 0 do ( suck the data stack into the return stack )
+                            _RS_ @ 4 - I - !
+                        loop
+                        _R1_ @ 0 do ( restore the data stack )
+                            _RS_ @ 3 - _R1_ @ - I + @
+                        loop
+                        _RS_ @ _R1_ @ - @ ( get the item we want )
+                        _RS_ @ _R1_ @ - 1 - _RS_ ! ( restore the return stack ) ;" },
 
                 {TokenType.Math, "+", Code.Add, Code.Pop},
                 new TestCase("1 1 +", "2"),
                 {TokenType.Math, "-", Code.Sub, Code.Pop},
                 new TestCase("1 1 -", "0"),
                 {TokenType.Math, "*", "MulDefinition"},
-                new Prerequisite("_MulCode_", "_ReturnStackCode_"),
+                new Prerequisite("_ReturnStackCode_", "_MulCode_"),
                 new TestCase("2 5 *","10"),
                 new TestCase("10 100 *","1000"),
                 {TokenType.Math, "/", nameof(NotImplementedException)},
@@ -138,7 +150,10 @@ namespace ForthCompiler
                 new TestCase("1 2 3 ROT", "2 3 1"),
                 {TokenType.Stack, "-ROT", "_take3_ _R3_ @ _R1_ @ _R2_ @ _drop3_"},
                 new TestCase("1 2 3 -ROT", "3 1 2"),
-                {TokenType.Stack, "PICK", nameof(NotImplementedException)},
+                {TokenType.Stack, "PICK", "PickDefinition"},
+                new TestCase("11 22 33 44 0 PICK", "11 22 33 44 44"),
+                new TestCase("11 22 33 44 3 PICK", "11 22 33 44 11"),
+                new Prerequisite("_ReturnStackCode_", "_PickCode_"),
                 {TokenType.Stack, "2DUP", "_take2_ _R1_ @ _R2_ @ _R1_ @ _R2_ @ _drop2_"},
                 new TestCase("1 2 2DUP", "1 2 1 2"),
                 new Prerequisite("_ReturnStackCode_"),
@@ -161,11 +176,12 @@ namespace ForthCompiler
                 {TokenType.Structure, "_Misc_tests_", " "},
                 new TestCase("VARIABLE TestVariable 1 TestVariable ! TestVariable @", "1"),
                 new TestCase("2 CONSTANT TestConstant TestConstant", "2"),
+                new TestCase("[ 2 20 + ] CONSTANT TestConstant22 TestConstant22", "22"),
                 new TestCase("3 VALUE TestValue TestValue @", "3"),
                 new TestCase("$F $B -", "4"),
                 new TestCase("%101", "5"),
                 new TestCase("#6", "6"),
-                new TestCase("[ 1 1 2 3 + + + ]", "7"),
+                new TestCase("[ 2 3 * 1 + ]", "7"),
                 new TestCase("1 if 8 else 9 then", "8"),
                 new TestCase("0 if 8 else 9 then", "9"),
                 new TestCase("5 0 do I loop", "0 1 2 3 4"),
@@ -186,6 +202,8 @@ namespace ForthCompiler
 
         private int _tokenIndex;
         private readonly Stack<Token> _structureStack = new Stack<Token>();
+        private readonly Dictionary<string, Label> _labels = new Dictionary<string, Label>(StringComparer.OrdinalIgnoreCase);
+        private int _prerequisteIndex;
 
         public Compiler()
         {
@@ -222,42 +240,18 @@ namespace ForthCompiler
 
             for (var index = 0; index < depth; index++)
             {
-                int code = 0, start = index * 8;
-
-                foreach (int i in Enumerable.Range(0, 8))
-                {
-                    code += ((int)CodeSlots[start + i].Code) << (i * 4);
-                }
+                var code = Enumerable.Range(index * 8, 8).Sum(i => (int)CodeSlots[i].Code << ((i - index * 8) * 4));
 
                 yield return $"{index:X4} : {code:X8};";
 
-                foreach (int i in Enumerable.Range(0, 8).Where(i => CodeSlots[start + i].Code == Code.Lit))
+                foreach (var i in Enumerable.Range(index * 8, 8).Where(i => CodeSlots[i].Code == Code.Lit))
                 {
-                    yield return $"{++index:X4} : {CodeSlots[start + i].Value:X8};";
+                    yield return $"{++index:X4} : {CodeSlots[i].Value:X8};";
                 }
             }
 
             yield return "";
             yield return "END";
-        }
-
-        T MakeDictEntry<T>(string key, Func<T> createFunc, bool exclusive = false) where T : IDictEntry
-        {
-            IDictEntry entry;
-
-            if (Dict.TryGetValue(key, out entry) && (exclusive || !(entry is T)))
-            {
-                throw new Exception($"{key} already defined as {entry.GetType().Name}");
-            }
-
-            var t = (T)entry;
-
-            if (t == null)
-            {
-                Dict[key] = t = createFunc();
-            }
-
-            return t;
         }
 
         public void Macro(string macro)
@@ -318,9 +312,9 @@ namespace ForthCompiler
                     }
                 }
 
-                foreach (var label in Dict.Values.OfType<LabelEntry>().Where(t => t.Patches != null))
+                foreach (var label in _labels.Where(t => t.Value.Patches != null))
                 {
-                    throw new Exception("Unpatched label " + Dict.First(d => d.Value == label).Key);
+                    throw new Exception("Unpatched label " + label.Key);
                 }
 
             }
@@ -409,14 +403,12 @@ namespace ForthCompiler
         {
         }
 
-
         private Cpu Evaluate(Token start)
         {
             var cpu = new Cpu(this) { ProgramSlot = start.CodeSlot };
 
             cpu.Run(i => cpu.ProgramSlot < CodeSlots.Count);
             CodeSlots.RemoveRange(start.CodeSlot, CodeSlots.Count - start.CodeSlot);
-
             Tokens.SkipWhile(t => t != start).ToList().ForEach(t => t.CodeSlot = CodeSlots.Count);
 
             return cpu;
@@ -435,13 +427,13 @@ namespace ForthCompiler
         {
             var cpu = Evaluate(Tokens[_tokenIndex - 4]);
 
-            MakeDictEntry(Token.Text, () => new ConstantEntry { Value = cpu.ForthStack.First() }, true);
+            Dict.MakeEntry(Token.Text, () => new ConstantEntry { Value = cpu.ForthStack.First() }, true);
         }
 
         [Method(null, TokenType.Organisation, HasArgument = true)]
         private void Addr(object dictEntry)
         {
-            var label = MakeDictEntry(Token.Text, () => new LabelEntry { Patches = new List<int>() });
+            var label = _labels.MakeEntry(Token.Text, () => new Label { Patches = new List<int>() });
 
             Encode(Code.Psh);
 
@@ -453,20 +445,19 @@ namespace ForthCompiler
         [Method(null, TokenType.Organisation, HasArgument = true)]
         private void Label(object dictEntry)
         {
-            var label = MakeDictEntry(Token.Text, () => new LabelEntry());
+            var label = _labels.MakeEntry(Token.Text, () => new Label());
 
             while (CodeSlots.Count % 8 != 0)
             {
                 Encode(Code._);
             }
 
-            label.CodeSlot = CodeSlots.Count;
-
             foreach (var patch in label.Patches ?? Enumerable.Empty<int>())
             {
-                CodeSlots[patch].Value = label.CodeSlot / 8;
+                CodeSlots[patch].Value = CodeSlots.Count / 8;
             }
 
+            label.CodeSlot = CodeSlots.Count;
             label.Patches = null;
         }
 
@@ -479,7 +470,7 @@ namespace ForthCompiler
         [Method(null, TokenType.Organisation, HasArgument = true)]
         private void Variable(object dictEntry)
         {
-            Token.DictEntry = MakeDictEntry(Token.Text, () => new VariableEntry { HeapAddress = HeapSize++ }, Token.MacroLevel == 0);
+            Token.DictEntry = Dict.MakeEntry(Token.Text, () => new VariableEntry { HeapAddress = HeapSize++ }, Token.MacroLevel == 0);
         }
 
         [Method(null, TokenType.Organisation)]
@@ -560,7 +551,8 @@ namespace ForthCompiler
         {
             var doToken = _structureStack.Pop(nameof(Do));
 
-            Macro($"1 _R2_ @ + _R2_ ! addr {doToken}START /jnz label {doToken}END _R3_ @ _LOOP_RS_ ! _drop3_");
+            Macro($@"1 _R2_ @ + _R2_ ! addr {doToken}START /jnz
+                     label {doToken}END _R3_ @ _LOOP_RS_ ! _drop3_");
         }
 
         [Method("+LOOP", TokenType.Structure)]
@@ -568,7 +560,8 @@ namespace ForthCompiler
         {
             var doToken = _structureStack.Pop(nameof(Do));
 
-            Macro($"_R2_ @ + _R2_ ! addr {doToken}START /jnz label {doToken}END _R3_ @ _LOOP_RS_ ! _drop3_");
+            Macro($@"_R2_ @ + _R2_ ! addr {doToken}START /jnz 
+                     label {doToken}END _R3_ @ _LOOP_RS_ ! _drop3_");
         }
 
         [Method(null, TokenType.Structure)]
@@ -696,7 +689,7 @@ namespace ForthCompiler
         [Method(":", TokenType.Definition, HasArgument = true), Prerequisite("_ReturnStackCode_")]
         public void DefinitionStart(object dictEntry)
         {
-            MakeDictEntry(Token.Text, () => new DefinitionEntry(), true);
+            Dict.MakeEntry(Token.Text, () => new DefinitionEntry(), true);
 
             _structureStack.Push(Token);
             Macro($"addr {Token}SKIP /jnz label {Token.Text}LABEL _take1_");
@@ -714,9 +707,14 @@ namespace ForthCompiler
         {
             foreach (var reference in prerequisite.References.Where(r => !Dict.ContainsKey($"included {r}")))
             {
+                var macro = Dict.MakeEntry<IDictEntry,MacroText>(reference, () => { throw new Exception($"{reference} is not defined"); });
+                var count = Tokens.Count;
+
                 Dict.Add($"included {reference}", null);
-                Tokens.Insert(0, new Token(reference, reference, 0, 0, 0));
-                _tokenIndex++;
+                ReadFile(_prerequisteIndex, reference, y => y, x => x, macro.Text.Split(new []{"\r\n","\r","\n"}, 0));
+
+                _prerequisteIndex += Tokens.Count - count;
+                _tokenIndex += Tokens.Count - count;
             }
         }
 
@@ -781,7 +779,6 @@ namespace ForthCompiler
     {
         public void Process(Compiler compiler)
         {
-            throw new NotImplementedException();
         }
 
         public TokenType TokenType => TokenType.Undetermined;

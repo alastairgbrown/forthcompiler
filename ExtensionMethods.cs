@@ -7,6 +7,26 @@ namespace ForthCompiler
 {
     public static class ExtensionMethods
     {
+        public static T MakeEntry<DT,T>(this Dictionary<string,DT> dict,  string key, Func<T> createFunc, bool exclusive = false) where T : DT
+        {
+            DT entry;
+
+            if (dict.TryGetValue(key, out entry) && (exclusive || !(entry is T)))
+            {
+                throw new Exception($"{key} already defined as {entry.GetType().Name}");
+            }
+
+            var t = (T)entry;
+
+            if (t == null)
+            {
+                dict[key] = t = createFunc();
+            }
+
+            return t;
+        }
+
+
         public static Token Pop(this Stack<Token> stack, params string[] methods)
         {
             if (!stack.Any() || methods.All(n => stack.Peek().MethodName != n))
