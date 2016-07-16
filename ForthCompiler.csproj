@@ -69,6 +69,9 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Core.4th">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="Test1.4th" />
   </ItemGroup>
   <ItemGroup>

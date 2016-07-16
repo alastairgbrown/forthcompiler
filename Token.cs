@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
 namespace ForthCompiler
@@ -24,16 +25,17 @@ namespace ForthCompiler
         public int Y { get; }
         public int X { get; }
         public string Text { get; set; }
+        public List<Token> Arguments { get; set; }
         public IDictEntry DictEntry { get; set; }
         public int CodeSlot { get; set; } = -1;
         public int CodeCount { get; set; }
 
-        public string MethodName => (DictEntry as MethodAttribute)?.Method.Name;
+        public string MethodName => (DictEntry as Method)?.MethodName;
         public TokenType TokenType => _tokenType ?? DictEntry?.TokenType ?? TokenType.Undetermined;
 
         public override string ToString()
         {
-            return $"_{Text}_{CodeSlot:X}";
+            return $"{Text} {File}({Y+1},{X+1})";
         }
 
         public void SetError()

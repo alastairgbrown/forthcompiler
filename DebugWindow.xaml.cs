@@ -150,7 +150,7 @@ namespace ForthCompiler
             var tests = SourceItems.Any(si => si.Break) ? SourceItems.Where(si => si.Break).ToArray() : SourceItems.ToArray();
             var results = new Dictionary<string, int> { { "PASS", 0 }, { "FAIL", 0 } };
 
-            foreach (var test in tests.Where(t => t.Tokens.First().TokenType == TokenType.TestCase))
+            foreach (var test in tests.Where(t => t.IsTestCase))
             {
                 Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeSlot };
                 Cpu.Run(i => Cpu.ProgramSlot < test.CodeSlot + test.CodeCount);

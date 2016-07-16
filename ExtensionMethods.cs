@@ -7,9 +7,14 @@ namespace ForthCompiler
 {
     public static class ExtensionMethods
     {
-        public static T MakeEntry<DT,T>(this Dictionary<string,DT> dict,  string key, Func<T> createFunc, bool exclusive = false) where T : DT
+        public static bool IsEqual(this string a, string b)
         {
-            DT entry;
+            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase) == 0;
+        }
+
+        public static T MakeEntry<TD,T>(this Dictionary<string,TD> dict,  string key, Func<T> createFunc, bool exclusive = false) where T : TD
+        {
+            TD entry;
 
             if (dict.TryGetValue(key, out entry) && (exclusive || !(entry is T)))
             {
@@ -27,11 +32,11 @@ namespace ForthCompiler
         }
 
 
-        public static Token Pop(this Stack<Token> stack, params string[] methods)
+        public static Structure Pop(this Stack<Structure> stack, string name)
         {
-            if (!stack.Any() || methods.All(n => stack.Peek().MethodName != n))
+            if (!stack.Any() || string.Compare(stack.Peek().Name, name, StringComparison.OrdinalIgnoreCase) != 0)
             {
-                throw new Exception("Missing " + methods);
+                throw new Exception($"Missing close for {name}");
             }
 
             return stack.Pop();
@@ -67,9 +72,9 @@ namespace ForthCompiler
         }
         public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, TestCase testcase)
         {
-            var func = dict[DictType.Dict].Last().Key;
+            var func = testcase.For ?? dict[DictType.Dict].Last().Key;
 
-            dict[DictType.TestCase].Add($"{nameof(Compiler.TestCase)} {func} {testcase.Text}", testcase);
+            dict[DictType.TestCase].Add($"( Test Case {func} ) {testcase.Text}", testcase);
         }
 
         public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, Prerequisite prerequisite)

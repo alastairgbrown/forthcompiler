@@ -1,31 +1,27 @@
+using System.Linq;
+
 namespace ForthCompiler
 {
-    public abstract class Macro : IDictEntry
+    public abstract class Macro 
     {
-        public abstract void Process(Compiler compiler);
-
         public TokenType TokenType { get; set; }
     }
 
-    public class MacroCode : Macro
+    public class MacroCode : Macro, IDictEntry
     {
         public Code[] Codes { get; set; }
 
-        public override void Process(Compiler compiler)
+        public void Process(Compiler compiler)
         {
-            compiler.Encode(Codes);
+            compiler.Encode(Codes.Select(c => (CodeSlot)c).ToArray());
         }
     }
 
-    public class MacroText : Macro
+    public class MacroText : Macro, IDictEntry
     {
         public string Text { get; set; }
-        public override string ToString()
-        {
-            return Text;
-        }
 
-        public override void Process(Compiler compiler)
+        public void Process(Compiler compiler)
         {
             compiler.Macro(Text);
         }

@@ -90,7 +90,7 @@ namespace ForthCompiler
 
                 if (argMap.ContainsKey("-f"))
                 {
-                    compiler.ReadFile(0, argMap["-f"], y => y + 1, x => x, File.ReadAllLines(argMap["-f"]));
+                    compiler.ReadFile(0, argMap["-f"], y => y, x => x, File.ReadAllLines(argMap["-f"]));
                 }
                 else if (test)
                 {

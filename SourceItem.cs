@@ -30,14 +30,12 @@ namespace ForthCompiler
 
         public bool Break { get; set; }
 
-        public TextBlock Text
-        {
+        public List<Token> DisplayTokens {
             get
             {
-                _originalCodeCounts = _originalCodeCounts ?? Tokens.Select(t => t.CodeCount).ToArray();
-
                 var tokens = new List<Token>();
-                var block = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 1000, MinWidth = 1000 };
+
+                _originalCodeCounts = _originalCodeCounts ?? Tokens.Select(t => t.CodeCount).ToArray();
 
                 for (int i = 0; i < Tokens.Count; i++)
                 {
@@ -53,7 +51,19 @@ namespace ForthCompiler
                     }
                 }
 
-                foreach (var token in tokens)
+                return tokens;
+            }
+        }
+
+        public bool IsTestCase => string.Join(null, Tokens.Take(6).Select(t => t.Text)).IsEqual("( Test Case ");
+
+        public TextBlock Text
+        {
+            get
+            {
+                var block = new TextBlock { TextWrapping = TextWrapping.Wrap, MaxWidth = 1000, MinWidth = 1000 };
+
+                foreach (var token in DisplayTokens)
                 {
                     bool current = token.Contains(Parent.Cpu.ProgramSlot);
 
