@@ -21,12 +21,19 @@
                 <TextBlock Text="{Binding Value}" MinWidth="40" Foreground="{Binding Foreground}"/>
             </StackPanel>
         </DataTemplate>
+        <DataTemplate x:Key="CallStackItemTemplate" DataType="{x:Type local:CallStackItem}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{Binding AddressFormatted}" MinWidth="40"/>
+                <TextBlock Text="{Binding Name}" MinWidth="120"/>
+            </StackPanel>
+        </DataTemplate>
     </Window.Resources>
     <Grid >
         <Grid.RowDefinitions>
             <RowDefinition Height="24" />
             <RowDefinition Height="40" />
-            <RowDefinition Height="248*" />
+            <RowDefinition Height="200*" />
+            <RowDefinition Height="100*" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="180" />
@@ -37,7 +44,9 @@
             <MenuItem x:Name="RunButton" Header="_Run" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RunButton_Click" />
             <MenuItem x:Name="StepAsmButton" Header="Step _ASM" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepAsmButton_Click" />
             <MenuItem x:Name="StepTokenButton" Header="Step _Token" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepTokenButton_Click" />
-            <MenuItem x:Name="StepLineButton" Header="Step _Line" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepLineButton_Click" />
+            <MenuItem x:Name="StepOverButton" Header="Step Over" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOverButton_Click" />
+            <MenuItem x:Name="StepIntoButton" Header="Step Into" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepIntoButton_Click" />
+            <MenuItem x:Name="StepOutButton" Header="Step Out" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOutButton_Click" />
             <MenuItem x:Name="RunTestsButton" Header="Run Tests" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RunTestsButton_Click" />
             <MenuItem x:Name="SetPc" Header="Set PC" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="SetPc_Click" />
             <MenuItem x:Name="View" Header="View" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"  >
@@ -55,6 +64,7 @@
         </Menu>
         <Label x:Name="CpuLabel" Content="Label" Height="40" VerticalAlignment="Top" FontFamily="Consolas"  Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Grid.RowSpan="2"/>
         <ListBox x:Name="HeapListBox" ItemTemplate="{DynamicResource HeapItemTemplate}" Grid.Row="2" Grid.Column="0"/>
-        <ListBox x:Name="SourceListBox" ItemTemplate="{DynamicResource SourceItemTemplate}" Grid.Row="2" Grid.Column="1"/>
+        <ListBox x:Name="SourceListBox" ItemTemplate="{DynamicResource SourceItemTemplate}" Grid.Row="2" Grid.Column="1" Grid.RowSpan="2"/>
+        <ListBox x:Name="CallStackListBox" ItemTemplate="{DynamicResource CallStackItemTemplate}" Grid.Row="3" Grid.Column="0"/>
     </Grid>
 </Window>

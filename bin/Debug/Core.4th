@@ -6,7 +6,8 @@ TESTCASE $ "$F $B -" "4"
 TESTCASE % "%101" "5"
 TESTCASE # "#6" "6"
 TESTCASE [] "[ 2 3 * 1 + ]" "7"
-TESTCASE defintion ": def dup + ; 123 def" "246"
+TESTCASE definition ": def dup + ;" ""
+TESTCASE definition "123 def" "246"
 
 MACROCLASS Stack
 MACRO _R1_    _RS_ @ MACROEND
@@ -69,6 +70,7 @@ MACRO * MulDefinition MACROEND
     TESTCASE * "10 100 *" "1000"
 
 MACRO / NotImplementedException MACROEND
+MACRO . NotImplementedException MACROEND
 
 MACRO = /Sub /Swp /Zeq /Pop MACROEND
     TESTCASE = "1 1 =" "-1"

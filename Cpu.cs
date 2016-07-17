@@ -12,20 +12,25 @@ namespace ForthCompiler
         public int[] LastHeap { get; }
         public Stack<int> Stack { get; } = new Stack<int>();
         public IEnumerable<int> ForthStack => new[] { _top, _next }.Concat(Stack).Take(Stack.Count);
+        public Stack<Structure> CallStack { get; } = new Stack<Structure>();
 
         private int _top;
         private int _next;
         private bool _carry;
         private string _error;
         public string[] LastState { get; private set; }
-        private CodeSlot[] _codeslots;
+        private readonly CodeSlot[] _codeslots;
         public Func<int, string> Formatter { get; set; } = i => $"{i}";
+        private Dictionary<int, string> _definitions;
 
         public Cpu(Compiler compiler)
         {
             _codeslots = compiler.CodeSlots.ToArray();
+            _definitions = compiler.Labels.Where(l => l.Key.StartsWith("Global."))
+                                          .ToDictionary(l => l.Value.CodeSlot, l => l.Key);
             Heap = new int[compiler.HeapSize];
             LastHeap = new int[compiler.HeapSize];
+            CallStack.Push(new Structure { Name = "Global.Global.0", Next = int.MaxValue });
         }
 
         public IEnumerable<string> ThisState => new[]
@@ -129,14 +134,16 @@ namespace ForthCompiler
             }
         }
 
-        public void Run(Func<int, bool?> continueCondition)
+        public void Run(Func<int, bool> breakCondition)
         {
             _error = null;
             LastState = ThisState.ToArray();
             Array.Copy(Heap, LastHeap, Heap.Length);
 
-            for (int i = 0; continueCondition(i) ?? true; i++)
+            for (int i = 0; i == 0 || !breakCondition(i); i++)
             {
+                var lastSlot = ProgramSlot;
+
                 try
                 {
                     Step();
@@ -150,6 +157,18 @@ namespace ForthCompiler
                     _error = $"Error={ex.Message}";
                     break;
                 }
+
+                if (_codeslots[lastSlot].Code == Code.Cnz && _definitions.ContainsKey(ProgramSlot))
+                {
+                    var next = Enumerable.Range(0, _codeslots.Length).Skip(lastSlot / 8 * 8 + 8).First(cs => _codeslots[cs] != null);
+                    CallStack.Push(new Structure { Name = _definitions[ProgramSlot], Next = next });
+                }
+                else if (ProgramSlot == CallStack.Peek().Next)
+                {
+                    CallStack.Pop();
+                }
+
+                CallStack.Peek().Value = ProgramSlot;
             }
         }
     }

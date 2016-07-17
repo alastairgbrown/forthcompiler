@@ -9,11 +9,11 @@ namespace ForthCompiler
 
     public class MacroCode : Macro, IDictEntry
     {
-        public Code[] Codes { get; set; }
+        public Code Code { get; set; }
 
         public void Process(Compiler compiler)
         {
-            compiler.Encode(Codes.Select(c => (CodeSlot)c).ToArray());
+            compiler.Encode(Code);
         }
     }
 

@@ -22,8 +22,11 @@ namespace ForthCompiler
 
         public Cpu Cpu { get; set; }
 
+        private HashSet<int> _breaks;
+
         private ObservableCollection<SourceItem> SourceItems { get; } = new ObservableCollection<SourceItem>();
         private ObservableCollection<HeapItem> HeapItems { get; } = new ObservableCollection<HeapItem>();
+        private ObservableCollection<CallStackItem> CallStackItems { get; } = new ObservableCollection<CallStackItem>();
 
         public DebugWindow(Compiler compiler, bool test)
         {
@@ -40,6 +43,7 @@ namespace ForthCompiler
 
             HeapListBox.ItemsSource = HeapItems;
             SourceListBox.ItemsSource = SourceItems;
+            CallStackListBox.ItemsSource = CallStackItems;
 
             for (int i = 0; i < Compiler.Tokens.Count; i++)
             {
@@ -94,6 +98,14 @@ namespace ForthCompiler
             {
                 item.Refresh();
             }
+
+            CallStackItems.Clear();
+            foreach (var item in Cpu.CallStack)
+            {
+                CallStackItems.Add(new CallStackItem {Parent = this, Item = item});
+                CallStackItems.Last().Refresh();
+            }
+
         }
 
         public string Formatter(int i)
@@ -101,11 +113,12 @@ namespace ForthCompiler
             return ShowHex.IsChecked ? $"{i:X}" : $"{i}";
         }
 
-        private void Run(Func<int, bool?> continueCondition)
+        private void Run(Func<int, bool> breakCondition)
         {
             var start = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
 
-            Cpu.Run(continueCondition);
+            _breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeSlot));
+            Cpu.Run(breakCondition);
 
             Refresh(si => si == start || si.Contains(Cpu.ProgramSlot), hi => hi.IsChanged);
         }
@@ -113,28 +126,41 @@ namespace ForthCompiler
 
         private void StepAsmButton_Click(object sender, RoutedEventArgs e)
         {
-            Run(i => i == 0);
+            Run(i => true);
         }
 
         private void StepTokenButton_Click(object sender, RoutedEventArgs e)
         {
             var token = Compiler.Tokens.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
 
-            Run(i => token?.Contains(Cpu.ProgramSlot));
+            Run(i => !token.Contains(Cpu.ProgramSlot));
         }
 
-        private void StepLineButton_Click(object sender, RoutedEventArgs e)
+        private void StepOverButton_Click(object sender, RoutedEventArgs e)
+        {
+            var line = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+            var callstack = Cpu.CallStack.Count;
+
+            Run(i => line == null || (!line.Contains(Cpu.ProgramSlot) && Cpu.CallStack.Count <= callstack) || _breaks.Contains(Cpu.ProgramSlot));
+        }
+
+        private void StepIntoButton_Click(object sender, RoutedEventArgs e)
         {
             var line = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
 
-            Run(i => line?.Contains(Cpu.ProgramSlot));
+            Run(i => line == null || !line.Contains(Cpu.ProgramSlot) || _breaks.Contains(Cpu.ProgramSlot));
+        }
+
+        private void StepOutButton_Click(object sender, RoutedEventArgs e)
+        {
+            var callstack = Cpu.CallStack.Count;
+
+            Run(i => Cpu.CallStack.Count < callstack || _breaks.Contains(Cpu.ProgramSlot));
         }
 
         private void RunButton_Click(object sender, RoutedEventArgs e)
         {
-            var breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeSlot));
-
-            Run(i => i == 0 || !breaks.Contains(Cpu.ProgramSlot));
+            Run(i => i > 0 && _breaks.Contains(Cpu.ProgramSlot));
         }
 
         private void RestartButton_Click(object sender, RoutedEventArgs e)
@@ -153,7 +179,7 @@ namespace ForthCompiler
             foreach (var test in tests.Where(t => t.IsTestCase))
             {
                 Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeSlot };
-                Cpu.Run(i => Cpu.ProgramSlot < test.CodeSlot + test.CodeCount);
+                Cpu.Run(i => Cpu.ProgramSlot >= test.CodeSlot + test.CodeCount);
 
                 var stack = Cpu.ForthStack.ToArray();
                 var result = "FAIL";
@@ -209,5 +235,6 @@ namespace ForthCompiler
 
             Refresh(si => true, hi => true);
         }
+
     }
 }

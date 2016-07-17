@@ -50,6 +50,7 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CallStackItem.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="Cpu.cs" />
     <Compile Include="DebugWindow.xaml.cs">

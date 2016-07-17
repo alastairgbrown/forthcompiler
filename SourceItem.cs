@@ -21,9 +21,7 @@ namespace ForthCompiler
             {TokenType.Variable, Brushes.Magenta},
             {TokenType.Constant, Brushes.Black},
             {TokenType.Definition, Brushes.Black},
-            {TokenType.Label, Brushes.Black},
             {TokenType.Error, Brushes.Red},
-            {TokenType.TestCase, Brushes.DarkCyan }
         };
 
         private int[] _originalCodeCounts;

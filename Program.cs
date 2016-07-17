@@ -94,8 +94,7 @@ namespace ForthCompiler
                 }
                 else if (test)
                 {
-                    var lines = compiler.Entries[DictType.TestCase].Keys.ToArray();
-                    compiler.ReadFile(0, "Test Cases", y => y, x => x, lines);
+                    compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.TestCases.Values);
                 }
 
                 compiler.Parse();
@@ -181,9 +180,7 @@ namespace ForthCompiler
         Variable,
         Constant,
         Definition,
-        Label,
         Error,
-        TestCase
     }
 
     public interface ISlotRange

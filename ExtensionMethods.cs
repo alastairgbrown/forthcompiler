@@ -62,26 +62,9 @@ namespace ForthCompiler
             return slot >= token.CodeSlot && slot < token.CodeSlot + token.CodeCount;
         }
 
-        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, TokenType tokenType, string name, params Code[] codes)
+        public static void Add<T>(this Stack<T> stack, T item)
         {
-            dict[DictType.Dict].Add(name, new MacroCode { TokenType = tokenType, Codes = codes });
-        }
-        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, TokenType tokenType, string name, string macrotext)
-        {
-            dict[DictType.Dict].Add(name, new MacroText { TokenType = tokenType, Text = macrotext });
-        }
-        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, TestCase testcase)
-        {
-            var func = testcase.For ?? dict[DictType.Dict].Last().Key;
-
-            dict[DictType.TestCase].Add($"( Test Case {func} ) {testcase.Text}", testcase);
-        }
-
-        public static void Add(this Dictionary<DictType, Dictionary<string, IDictEntry>> dict, Prerequisite prerequisite)
-        {
-            var func = dict[DictType.Dict].Last().Key;
-
-            dict[DictType.PreComp].Add(func, prerequisite);
+            stack.Push(item);
         }
     }
 }
