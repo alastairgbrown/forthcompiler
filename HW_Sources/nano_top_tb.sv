@@ -1,5 +1,5 @@
-`timescale 1ns/100ps
-module nano_project_top_tb();
+`timescale 1ns/1ns
+module nano_top_tb();
 
    logic          clock, sreset;
    
@@ -8,14 +8,12 @@ module nano_project_top_tb();
       sreset = 1'b0;
       #40 sreset = 1'b1;
       #20 sreset = 1'b0;
-      #600 sreset = 1'b1;
-      #20 sreset = 1'b0;
    end
    
-   always #20.35 clock = ~clock;
+   always #20 clock = ~clock;
    
    logic             led;
-   nano_project_top       dut(
+   nano_top          dut(
                         .clock(clock),
                         .led(led)
                      );
