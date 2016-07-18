@@ -1,24 +1,24 @@
 # forthcompiler
 
 # The Current Op Code Set
-Hex Value | Mnemonic | Function
-----------|----------|---------
-0         | NOP
-1         | LDW
-2         | STW
-3         | PSH
-4         | POP
-5         | SWP
-6         | JNZ
-7         | JSR
-8         | ADD
-9         | ADC
-A         | SUB
-B         | AND
-C         | XOR
-D         | LSR
-E         | ZEQ
-F         | LIT
+Hex Value | Mnemonic | Description            | Dataflow
+----------|----------|------------------------|----------
+0         | NOP      | No Operation           | no
+1         | LDW      | Load Word              |
+2         | STW      | Store Word             |
+3         | PSH      | Push Top               |
+4         | POP      | Pop Top                |
+5         | SWP      | Swap Top, Next         |
+6         | JNZ      | Jump if Next Not ZERO  |
+7         | JSR      | Jump Subroutine        |
+8         | ADD      | Add                    |
+9         | ADC      | Add with Carry         |
+A         | SUB      | Subtract Top from Next |
+B         | AND      | And                    |
+C         | XOR      | Xor                    |
+D         | LSR      | Logic Shift Right      |
+E         | ZEQ      | Equal Zero Test        |
+F         | LIT      | Push Literal           |
 
 ## Test cases
 
