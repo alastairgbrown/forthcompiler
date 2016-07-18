@@ -4,21 +4,21 @@
 Hex Value | Mnemonic | Description            | Dataflow
 ----------|----------|------------------------|----------
 0         | NOP      | No Operation           | no
-1         | LDW      | Load Word              |
-2         | STW      | Store Word             |
-3         | PSH      | Push Top               |
-4         | POP      | Pop Top                |
-5         | SWP      | Swap Top, Next         |
-6         | JNZ      | Jump if Next Not ZERO  |
-7         | JSR      | Jump Subroutine        |
-8         | ADD      | Add                    |
-9         | ADC      | Add with Carry         |
-A         | SUB      | Subtract Top from Next |
-B         | AND      | And                    |
-C         | XOR      | Xor                    |
-D         | LSR      | Logic Shift Right      |
-E         | ZEQ      | Equal Zero Test        |
-F         | LIT      | Push Literal           |
+1         | LDW      | Load Word              | top<-mem(top);
+2         | STW      | Store Word             | mem(top)<-next; pop;
+3         | PSH      | Push Top               | push;
+4         | POP      | Pop Top                | pop;
+5         | SWP      | Swap Top, Next         | top<->next;
+6         | JNZ      | Jump if Next Not ZERO  | if(next!=0){pc<-top;} pop;
+7         | JSR      | Jump Subroutine        | top<->pc;
+8         | ADD      | Add                    | next<-next+top; cf<-cout; pop;
+9         | ADC      | Add with Carry         | next<-next+top; cf<-cout; pop;
+A         | SUB      | Subtract Top from Next | next<-next+top; cf<-cout; pop;
+B         | AND      | And                    | next<-next&top; pop;
+C         | XOR      | Xor                    | next<-next^top; pop;
+D         | LSR      | Logic Shift Right      | cf<-top&0x1; top<-top>>1;
+E         | ZEQ      | Equal Zero Test        | if(top==0){top<-0xfffff...ff;}else{top<-0x0;}
+F         | LIT      | Push Literal           | push; top<-mem(pc);pc<-pc+1;
 
 ## Test cases
 
