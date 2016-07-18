@@ -1,5 +1,30 @@
 # forthcompiler
 
+# The Current Op Code Set
+Hex Value | Mnemonic | Description            | Dataflow
+----------|----------|------------------------|----------
+0         | NOP      | No Operation           | no
+1         | LDW      | Load Word              | top = mem(top);
+2         | STW      | Store Word             | mem(top) = next; pop;
+3         | PSH      | Push Top               | push;
+4         | POP      | Pop Top                | pop;
+5         | SWP      | Swap Top, Next         | tmp = top; top = next; next = tmp;
+6         | JNZ      | Jump if Top Not ZERO   | if (top!=0) {pc = top;} pop;
+7         | JSR      | Jump Subroutine        | tmp = top; top = pc; pc = tmp;
+8         | ADD      | Add                    | next = next + top; cf = cout; pop;
+9         | ADC      | Add with Carry         | next = next + top + cf; cf = cout; pop;
+A         | SUB      | Subtract Top from Next | next = next + (~top) + 1; cf = cout; pop;
+B         | AND      | And                    | next = next & top; pop;
+C         | XOR      | Xor                    | next = next ^ top; pop;
+D         | LSR      | Logic Shift Right      | cf = (top & 0x1); top = (top >> 1);
+E         | ZEQ      | Equal Zero Test        | if (top==0){top = 0xfffff...ff;} else {top = 0x0;}
+F         | LIT      | Push Literal           | push; top = mem(pc);pc = pc + 1;
+
+Stack Function  | Dataflow
+----------------|--------------------------------------------|
+push defined as | mem(sp+1) = next; next = top; sp = sp + 1; |
+pop defined as  | top = next; next = mem(sp); sp = sp - 1;   |
+
 ## Test cases
 
 Forth Code                                    | Expected result
