@@ -9,7 +9,7 @@ Hex Value | Mnemonic | Description            | Dataflow
 3         | PSH      | Push Top               | push;
 4         | POP      | Pop Top                | pop;
 5         | SWP      | Swap Top, Next         | tmp = top; top = next; next = tmp;
-6         | JNZ      | Jump if Next Not ZERO  | if (next!=0) {pc = top;} pop;
+6         | JNZ      | Jump if Top Not ZERO   | if (top!=0) {pc = top;} pop;
 7         | JSR      | Jump Subroutine        | tmp = top; top = pc; pc = tmp;
 8         | ADD      | Add                    | next = next + top; cf = cout; pop;
 9         | ADC      | Add with Carry         | next = next + top + cf; cf = cout; pop;
