@@ -28,6 +28,13 @@
             </StackPanel>
         </DataTemplate>
     </Window.Resources>
+    <Window.CommandBindings>
+        <CommandBinding Command="{x:Static local:Shortcuts.Run}" Executed="Run_Click"/>
+        <CommandBinding Command="{x:Static local:Shortcuts.Restart}" Executed="Restart_Click"/>
+        <CommandBinding Command="{x:Static local:Shortcuts.StepOver}" Executed="StepOver_Click"/>
+        <CommandBinding Command="{x:Static local:Shortcuts.StepInto}" Executed="StepInto_Click"/>
+        <CommandBinding Command="{x:Static local:Shortcuts.StepOut}" Executed="StepOut_Click"/>
+    </Window.CommandBindings>
     <Grid >
         <Grid.RowDefinitions>
             <RowDefinition Height="24" />
@@ -40,14 +47,14 @@
             <ColumnDefinition Width="55*"/>
         </Grid.ColumnDefinitions>
         <Menu x:Name="ToolBar" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2">
-            <MenuItem x:Name="RestartButton" Header="R_estart" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RestartButton_Click" />
-            <MenuItem x:Name="RunButton" Header="_Run" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RunButton_Click" />
-            <MenuItem x:Name="StepAsmButton" Header="Step _ASM" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepAsmButton_Click" />
-            <MenuItem x:Name="StepTokenButton" Header="Step _Token" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepTokenButton_Click" />
-            <MenuItem x:Name="StepOverButton" Header="Step Over" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOverButton_Click" />
-            <MenuItem x:Name="StepIntoButton" Header="Step Into" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepIntoButton_Click" />
-            <MenuItem x:Name="StepOutButton" Header="Step Out" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOutButton_Click" />
-            <MenuItem x:Name="RunTestsButton" Header="Run Tests" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RunTestsButton_Click" />
+            <MenuItem x:Name="RestartButton" Header="R_estart" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="Restart_Click" ToolTip="Shift-F5" />
+            <MenuItem x:Name="RunButton" Header="_Run" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="Run_Click" ToolTip="F5" />
+            <MenuItem x:Name="StepAsm" Header="Step _ASM" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepAsm_Click" />
+            <MenuItem x:Name="StepToken" Header="Step _Token" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepToken_Click" />
+            <MenuItem x:Name="StepOver" Header="Step Over" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOver_Click" ToolTip="F10" />
+            <MenuItem x:Name="StepInto" Header="Step Into" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepInto_Click" ToolTip="F11" />
+            <MenuItem x:Name="StepOut" Header="Step Out" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOut_Click" ToolTip="Shift-F11" />
+            <MenuItem x:Name="RunTests" Header="Run Tests" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RunTests_Click" />
             <MenuItem x:Name="SetPc" Header="Set PC" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="SetPc_Click" />
             <MenuItem x:Name="View" Header="View" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"  >
                 <MenuItem x:Name="MacroLevel0" Header="Hide Macros" HorizontalAlignment="Left" Click="MacroLevel_Click" IsChecked="True"/>

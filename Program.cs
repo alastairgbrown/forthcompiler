@@ -98,6 +98,7 @@ namespace ForthCompiler
                 }
 
                 compiler.Parse();
+                compiler.CheckSequences();
 
                 if (argMap.ContainsKey("-mif"))
                 {
@@ -119,66 +120,31 @@ namespace ForthCompiler
 
     public enum Code : byte
     {
-        /// <summary>no operation : (may not be needed)</summary>
         _,
-
-        /// <summary>load word : top := mem(top)</summary>
         Ldw,
-
-        /// <summary>store word : mem(top) := next</summary>
         Stw,
-
-        /// <summary>push : mem(sp+1) := next; next := top; sp++;</summary>
         Psh,
-
-        /// <summary>pop : top := next; next := mem(sp); sp--;</summary>
         Pop,
-
-        /// <summary>swap : top &lt;=&gt; next;</summary>
         Swp,
-
-        /// <summary>jump top not zero : if (top!=0) { pc=top>>3; slot=top&amp;0x7; } pop;</summary>
         Jnz,
-
-        /// <summary>call top not zero : if (top!=0) { {pc,slot} &lt;=&gt; top; } else pop;</summary>
-        Cnz,
-
-        /// <summary>add with carry : next := next+top+c; (c modified with result)</summary>
-        Adc,
-
-        /// <summary>add : next := next+top; (c modified)</summary>
+        Jsr,
         Add,
-
-        /// <summary>subtract : next := next+!top+1; (c modified)</summary>
+        Adc,
         Sub,
-
-        /// <summary>bitwise and : next := next &amp; top;</summary>
         And,
-
-        /// <summary>bitwise xor : next :=next^top</summary>
         Xor,
-
-        /// <summary>logic shift right : next := top >> 1; (c modified)</summary>
         Lsr,
-
-        /// <summary>equal zero : next := (top == 0) ? 0xffffff... : 0x0;</summary>
         Zeq,
-
-        /// <summary>top &lt;=mem(pc++);</summary>
         Lit,
     }
 
     public enum TokenType
     {
         Undetermined,
-        Organisation,
         Excluded,
         Literal,
-        Math,
-        Stack,
-        Structure,
-        Variable,
         Constant,
+        Variable,
         Definition,
         Error,
     }

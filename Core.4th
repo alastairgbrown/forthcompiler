@@ -1,324 +1,331 @@
-﻿TESTCASE Variable "VARIABLE TestVariable 1 TestVariable ! TestVariable @" "1"
-TESTCASE CONSTANT "2 CONSTANT TestConstant TestConstant" "2"
-TESTCASE CONSTANT "[ 2 20 + ] CONSTANT TestConstant22 TestConstant22" "22"
-TESTCASE VALUE "3 VALUE TestValue TestValue @" "3"
-TESTCASE $ "$F $B -" "4"
-TESTCASE % "%101" "5"
-TESTCASE # "#6" "6"
-TESTCASE [] "[ 2 3 * 1 + ]" "7"
-TESTCASE definition ": def dup + ;" ""
-TESTCASE definition "123 def" "246"
+﻿TestCase Variable 1 VARIABLE TestVariable 1 TestVariable ! TestVariable @ EndTestCase
+TestCase CONSTANT 2 2 CONSTANT TestConstant TestConstant EndTestCase
+TestCase CONSTANT 22 [ 2 20 + ] CONSTANT TestConstant22 TestConstant22 EndTestCase
+TestCase VALUE 3 3 VALUE TestValue TestValue @ EndTestCase
+TestCase $ 4 $F $B - EndTestCase
+TestCase % 5 %101 EndTestCase
+TestCase # 6 #6 EndTestCase
+TestCase [] "7" [ 2 3 * 1 + ] EndTestCase
+TestCase definition "" : def dup + ; EndTestCase
+TestCase definition "246" 123 def EndTestCase
 
-MACROCLASS Stack
-MACRO _R1_    _RS_ @ MACROEND
-MACRO _R2_    _RS_ @ 1 - MACROEND
-MACRO _R3_    _RS_ @ 2 - MACROEND
-MACRO _R4_    _RS_ @ 3 - MACROEND
-MACRO _Take1_ _RS_ @ 1 + _RS_ ! _R1_ ! MACROEND
-MACRO _Take2_ _RS_ @ 2 + _RS_ ! _R2_ ! _R1_ ! MACROEND
-MACRO _Take3_ _RS_ @ 3 + _RS_ ! _R3_ ! _R2_ ! _R1_ ! MACROEND
-MACRO _Take4_ _RS_ @ 4 + _RS_ ! _R4_ ! _R3_ ! _R2_ ! _R1_ ! MACROEND
-MACRO _Drop1_ _RS_ @ 1 - _RS_ ! MACROEND
-MACRO _Drop2_ _RS_ @ 2 - _RS_ ! MACROEND
-MACRO _Drop3_ _RS_ @ 3 - _RS_ ! MACROEND
-MACRO _Drop4_ _RS_ @ 4 - _RS_ ! MACROEND
+Macro _R1_    _RS_ @ EndMacro
+Macro _R2_    _RS_ @ 1 - EndMacro
+Macro _R3_    _RS_ @ 2 - EndMacro
+Macro _R4_    _RS_ @ 3 - EndMacro
+Macro _Take1_ _RS_ @ 1 + _RS_ ! _R1_ ! EndMacro
+Macro _Take2_ _RS_ @ 2 + _RS_ ! _R2_ ! _R1_ ! EndMacro
+Macro _Take3_ _RS_ @ 3 + _RS_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
+Macro _Take4_ _RS_ @ 4 + _RS_ ! _R4_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
+Macro _Drop1_ _RS_ @ 1 - _RS_ ! EndMacro
+Macro _Drop2_ _RS_ @ 2 - _RS_ ! EndMacro
+Macro _Drop3_ _RS_ @ 3 - _RS_ ! EndMacro
+Macro _Drop4_ _RS_ @ 4 - _RS_ ! EndMacro
 
-MACROCLASS Organisation
-MACRO ReturnStackCode
+Macro ReturnStackCode
 	VARIABLE _RS_ 32 ALLOT _RS_ _RS_ ! 
     VARIABLE _LOOP_RS_
-    MACROEND
-\	PREREQUISITE : ReturnStackCode
-
-MACRO MultiplicationCode
+    EndMacro
+	Prerequisite ":" ReturnStackCode
+	
+Macro MultiplicationCode
 	: MulDefinition \ a b -- a*b
-		0 _take3_ \ _R1_ is factor1, _R1_ is factor2, _R3_ is product
-		begin _R1_ @ 0<> while
+		0 _Take3_ \ _R1_ is factor1, _R1_ is factor2, _R3_ is product
+		Begin _R1_ @ 0<> While
 			_R1_ @ 1 and 0<> _R2_ @ and _R3_ @ + _R3_ ! \ add to the product
 			_R2_ @ _R2_ @ + _R2_ ! \ LSL factor2
-			0 _R1_ @ /lsr /pop _R1_ ! \ LSR factor1
+			_R1_ @ /lsr _R1_ ! \ LSR factor1
 		repeat
 		_R3_ @ _drop3_ 
 	;
-    MACROEND
+    EndMacro
 
-MACRO PickCode
+Macro PickCode
 	: PickDefinition \  xu .. x0 u -- xu .. x0 xu
 		1 + dup _RS_ @ + _RS_ !  _Take1_ \ allocate xu+2 items on the return stack
-		_R1_ @ 0 do \ suck the data stack into the return stack
+		_R1_ @ 0 Do \ suck the data stack into the return stack
 			_RS_ @ 4 - I - !
-		loop
-		_R1_ @ 0 do \ restore the data stack
+		Loop
+		_R1_ @ 0 Do \ restore the data stack
 			_RS_ @ 3 - _R1_ @ - I + @
-		loop
+		Loop
 		_RS_ @ _R1_ @ - @ \ get the item we want
 		_RS_ @ _R1_ @ - 1 - _RS_ ! \ restore the return stack
 	;
-    MACROEND
-MACROCLASS Math
+    EndMacro
 
-MACRO + /Add /Pop MACROEND
-    TESTCASE + "1 1 +" "2"
+Macro + /Add EndMacro
+    TestCase + "2" 1 1 + EndTestCase
 
-MACRO - /Sub /Pop MACROEND
-    TESTCASE - "1 1 -" "0"
+Macro - /Sub EndMacro
+    TestCase - "0" 1 1 - EndTestCase
+    TestCase - "-1" 0 1 - EndTestCase
+    TestCase - "2" 4 2 - EndTestCase
 
-MACRO * MulDefinition MACROEND
-    PREREQUISITE * ReturnStackCode
-	PREREQUISITE *  MultiplicationCode
-    TESTCASE * "2 5 *" "10"
-    TESTCASE * "10 100 *" "1000"
+Macro * MulDefinition EndMacro
+    Prerequisite * ReturnStackCode
+	Prerequisite * MultiplicationCode
+    TestCase * "10" 2 5 * EndTestCase
+    TestCase * "1000" 10 100 * EndTestCase
 
-MACRO / NotImplementedException MACROEND
-MACRO . NotImplementedException MACROEND
+Macro / NotImplementedException EndMacro
+Macro . NotImplementedException EndMacro
 
-MACRO = /Sub /Swp /Zeq /Pop MACROEND
-    TESTCASE = "1 1 =" "-1"
-    TESTCASE = "1 0 =" "0"
+Macro = /Sub /Zeq EndMacro
+    TestCase = "-1" 1 1 = EndTestCase
+    TestCase = "0" 1 0 = EndTestCase
 
-MACRO <> /Sub /Swp /Zeq /Swp /Zeq /Pop MACROEND
-    TESTCASE <> "1 1 <>" "0"
-    TESTCASE <> "1 0 <>" "-1"
+Macro <> /Sub /Zeq /Zeq EndMacro
+    TestCase <> "0" 1 1 <> EndTestCase
+    TestCase <> "-1" 1 0 <> EndTestCase
 
-MACRO 0= /Psh /Zeq /Pop MACROEND
-    TESTCASE 0= "0 0=" "-1"
-    TESTCASE 0= "1 0=" "0"
+Macro 0= /Zeq EndMacro
+    TestCase 0= "-1" 0 0= EndTestCase
+    TestCase 0= "0" 1 0= EndTestCase
 
-MACRO 0<> /Psh /Zeq /Swp /Zeq /Pop MACROEND
-    TESTCASE 0<> "0 0<>" "0"
-    TESTCASE 0<> "1 0<>" "-1"
+Macro 0<> /Zeq /Zeq EndMacro
+    TestCase 0<> "0" 0 0<> EndTestCase
+    TestCase 0<> "-1" 1 0<> EndTestCase
 
-MACRO < - drop 0 dup /adc drop 0<> MACROEND
-    TESTCASE < "0 1 <" "-1"
-    TESTCASE < "1 0 <" "0"
-    TESTCASE < "1 1 <" "0"
+Macro _-ve $80000000 - /psh /xor /psh /adc EndMacro
+	TestCase _-ve 1 -2 _-ve EndTestCase
+	TestCase _-ve 1 -1 _-ve EndTestCase
+	TestCase _-ve 0 0 _-ve EndTestCase
+	TestCase _-ve 0 1 _-ve EndTestCase
+	TestCase _-ve 0 2 _-ve EndTestCase
 
-MACRO > swap < MACROEND
-    TESTCASE > "0 1 >" "0"
-    TESTCASE > "1 0 >" "-1"
-    TESTCASE > "1 1 >" "0"
+Macro < - _-ve 0<> EndMacro
+    TestCase < "-1" 0 1 < EndTestCase
+    TestCase < "0" 1 0 < EndTestCase
+    TestCase < "0" 1 1 < EndTestCase
 
-MACRO <= swap >= MACROEND
-    TESTCASE <= "0 1 <=" "-1"
-    TESTCASE <= "1 0 <=" "0"
-    TESTCASE <= "1 1 <=" "-1"
+Macro > swap < EndMacro
+    TestCase > "0" 0 1 > EndTestCase
+    TestCase > "-1" 1 0 > EndTestCase
+    TestCase > "0" 1 1 > EndTestCase
 
-MACRO >= - drop 0 dup /adc drop 0= MACROEND
-    TESTCASE >= "0 1 >=" "0"
-    TESTCASE >= "1 0 >=" "-1"
-    TESTCASE >= "1 1 >=" "-1"
+Macro <= swap >= EndMacro
+    TestCase <= "-1" 0 1 <= EndTestCase
+    TestCase <= "0" 1 0 <= EndTestCase
+    TestCase <= "-1" 1 1 <= EndTestCase
 
-MACRO and /And /Pop MACROEND
-    TESTCASE and "127 192 and" "64"
+Macro >= - _-ve 0= EndMacro
+    TestCase >= "0" 0 1 >= EndTestCase
+    TestCase >= "-1" 1 0 >= EndTestCase
+    TestCase >= "-1" 1 1 >= EndTestCase
 
-MACRO xor /Xor /Pop MACROEND
-    TESTCASE xor "127 192 xor" "191"
+Macro and /And EndMacro
+    TestCase and "64" 127 192 and EndTestCase
 
-MACRO or -1 xor swap -1 xor and -1 xor MACROEND
-    TESTCASE or "127 192 or" "255"
+Macro xor /Xor EndMacro
+    TestCase xor "191" 127 192 xor EndTestCase
 
-MACRO invert -1 xor MACROEND
-    TESTCASE invert "-1 invert" "0"
-    TESTCASE invert "0 invert" "-1"
+Macro or -1 xor swap -1 xor and -1 xor EndMacro
+    TestCase or "255" 127 192 or EndTestCase
 
-MACRO mod NotImplementedException MACROEND
+Macro invert -1 xor EndMacro
+    TestCase invert "0" -1 invert EndTestCase
+    TestCase invert "-1" 0 invert EndTestCase
 
-MACRO negate 0 swap - MACROEND
-    TESTCASE negate "0 NEGATE" "0"
-    TESTCASE negate "-1 NEGATE" "1"
-    TESTCASE negate "1 NEGATE" "-1"
+Macro mod NotImplementedException EndMacro
 
-MACRO abs Dup 0 < IF Negate Then MACROEND
-    TESTCASE abs "-1 ABS" "1"
-    TESTCASE abs "1 ABS" "1"
+Macro negate 0 swap - EndMacro
+    TestCase negate "0" 0 NEGATE EndTestCase
+    TestCase negate "1" -1 NEGATE EndTestCase
+    TestCase negate "-1" 1 NEGATE EndTestCase
 
-MACRO min 2dup > IF Swap Then drop MACROEND
-    TESTCASE min "0 1 MIN" "0"
-    TESTCASE min "1 0 MIN" "0"
-    PREREQUISITE min ReturnStackCode
+Macro abs Dup 0 < If Negate Then EndMacro
+    TestCase abs "1" -1 ABS EndTestCase
+    TestCase abs "1" 1 ABS EndTestCase
 
-MACRO max 2Dup < IF Swap Then drop MACROEND
-    TESTCASE max "0 1 MAX" "1"
-    TESTCASE max "1 0 MAX" "1"
-    PREREQUISITE max ReturnStackCode
+Macro min 2dup > If Swap Then drop EndMacro
+    TestCase min "0" 0 1 MIN EndTestCase
+    TestCase min "0" 1 0 MIN EndTestCase
+    Prerequisite min ReturnStackCode
 
-MACRO LShift _take1_ begin _R1_ @ 0<> while dup + _R1_ @ 1 - _R1_ ! repeat _drop1_ MACROEND
-    TESTCASE LShift "16 4 lshift" "256"
-    PREREQUISITE LShift ReturnStackCode
+Macro max 2Dup < If Swap Then drop EndMacro
+    TestCase max "1" 0 1 MAX EndTestCase
+    TestCase max "1" 1 0 MAX EndTestCase
+    Prerequisite max ReturnStackCode
 
-MACRO RShift _take1_ begin _R1_ @ 0<> while dup /LSR drop _R1_ @ 1 - _R1_ ! repeat _drop1_ MACROEND
-    TESTCASE LShift "16 4 rshift" "1"
-    PREREQUISITE LShift ReturnStackCode
-MACROCLASS Stack
-MACRO dup /Psh MACROEND
-    TESTCASE dup "1 DUP" "1 1"
+Macro LShift _Take1_ Begin _R1_ @ 0<> While dup + _R1_ @ 1 - _R1_ ! repeat _drop1_ EndMacro
+    TestCase LShift "256" 16 4 lshift EndTestCase
+    Prerequisite LShift ReturnStackCode
 
-MACRO ?DUP DUP DUP 0= IF DROP THEN MACROEND
-    TESTCASE ?dup "1 ?DUP" "1 1"
-    TESTCASE ?dup "0 ?DUP" "0"
+Macro RShift _Take1_ Begin _R1_ @ 0<> While /LSR _R1_ @ 1 - _R1_ ! repeat _drop1_ EndMacro
+    TestCase LShift "1" 16 4 rshift EndTestCase
+    Prerequisite LShift ReturnStackCode
 
-MACRO DROP /Pop MACROEND
-    TESTCASE drop "1 2 DROP" "1"
+Macro dup /Psh EndMacro
+    TestCase dup "1 1" 1 DUP EndTestCase
 
-MACRO SWAP /Swp MACROEND
-    TESTCASE Swap "0 1 SWAP" "1 0"
+Macro ?DUP DUP DUP 0= If DROP THEN EndMacro
+    TestCase ?dup "1 1" 1 ?DUP EndTestCase
+    TestCase ?dup "0" 0 ?DUP EndTestCase
 
-MACRO OVER _Take2_ _R1_ @ _R2_ @ _R1_ @ _drop2_ MACROEND
-    TESTCASE Over "1 2 OVER" "1 2 1"
-    PREREQUISITE Over ReturnStackCode
+Macro DROP /Pop EndMacro
+    TestCase drop "1" 1 2 DROP EndTestCase
 
-MACRO NIP /Swp /Pop MACROEND
-    TESTCASE nip "1 2 NIP" "2"
+Macro SWAP /Swp EndMacro
+    TestCase Swap "1 0" 0 1 SWAP EndTestCase
 
-MACRO TUCK swap over MACROEND
-    TESTCASE tuck "1 2 TUCK" "2 1 2"
+Macro OVER _Take2_ _R1_ @ _R2_ @ _R1_ @ _drop2_ EndMacro
+    TestCase Over "1 2 1" 1 2 OVER EndTestCase
+    Prerequisite Over ReturnStackCode
 
-MACRO ROT _take3_ _R2_ @ _R3_ @ _R1_ @ _drop3_ MACROEND
-    TESTCASE rot "1 2 3 ROT" "2 3 1"
+Macro NIP /Swp /Pop EndMacro
+    TestCase nip "2" 1 2 NIP EndTestCase
 
-MACRO -ROT _take3_ _R3_ @ _R1_ @ _R2_ @ _drop3_ MACROEND
-    TESTCASE -rot "1 2 3 -ROT" "3 1 2"
+Macro TUCK swap over EndMacro
+    TestCase tuck "2 1 2" 1 2 TUCK EndTestCase
 
-MACRO PICK PickDefinition MACROEND
-    TESTCASE pick "11 22 33 44 0 PICK" "11 22 33 44 44"
-    TESTCASE pick "11 22 33 44 3 PICK" "11 22 33 44 11"
-    PREREQUISITE pick ReturnStackCode
-    PREREQUISITE pick PickCode
+Macro ROT _Take3_ _R2_ @ _R3_ @ _R1_ @ _drop3_ EndMacro
+    TestCase rot "2 3 1" 1 2 3 ROT EndTestCase
 
-MACRO 2DUP _take2_ _R1_ @ _R2_ @ _R1_ @ _R2_ @ _drop2_ MACROEND
-    TESTCASE 2dup "1 2 2DUP" "1 2 1 2"
-    PREREQUISITE 2dup ReturnStackCode
+Macro -ROT _Take3_ _R3_ @ _R1_ @ _R2_ @ _drop3_ EndMacro
+    TestCase -rot "3 1 2" 1 2 3 -ROT EndTestCase
 
-MACRO 2DROP /Pop /Pop MACROEND
-    TESTCASE 2DROP "1 2 3 4 2DROP" "1 2"
+Macro PICK PickDefinition EndMacro
+    TestCase pick "11 22 33 44 44" 11 22 33 44 0 PICK EndTestCase
+    TestCase pick "11 22 33 44 11" 11 22 33 44 3 PICK EndTestCase
+    Prerequisite pick ReturnStackCode
+    Prerequisite pick PickCode
 
-MACRO 2SWAP _take4_ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _drop4_ MACROEND
-    TESTCASE 2DROP "1 2 3 4 2SWAP" "3 4 1 2"
-    PREREQUISITE 2DROP ReturnStackCode
+Macro 2DUP _Take2_ _R1_ @ _R2_ @ _R1_ @ _R2_ @ _drop2_ EndMacro
+    TestCase 2dup "1 2 1 2" 1 2 2DUP EndTestCase
+    Prerequisite 2dup ReturnStackCode
 
-MACRO 2OVER _take4_ _R1_ @ _R2_ @ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _drop4_ MACROEND
-    TESTCASE 2OVER "1 2 3 4 2OVER" "1 2 3 4 1 2"
-    PREREQUISITE 2OVER ReturnStackCode
+Macro 2DROP /Pop /Pop EndMacro
+    TestCase 2DROP "1 2" 1 2 3 4 2DROP EndTestCase
 
-MACRO @ /Ldw MACROEND
+Macro 2SWAP _Take4_ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _drop4_ EndMacro
+    TestCase 2DROP "3 4 1 2" 1 2 3 4 2SWAP EndTestCase
+    Prerequisite 2DROP ReturnStackCode
 
-MACRO ! /Stw /Pop /Pop MACROEND
+Macro 2OVER _Take4_ _R1_ @ _R2_ @ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _drop4_ EndMacro
+    TestCase 2OVER "1 2 3 4 1 2" 1 2 3 4 2OVER EndTestCase
+    Prerequisite 2OVER ReturnStackCode
 
-MACRO +! dup -rot @ + swap ! MACROEND
-    TESTCASE +! "Variable Test_+!" ""
-    TESTCASE +! "1 Test_+! ! 1 Test_+! +! Test_+! @" "2"
-    TESTCASE +! "5 Test_+! ! 2 Test_+! +! Test_+! @" "7"
+Macro @ /Ldw EndMacro
 
-MACROCLASS Structure
-MACRO if 
-    STRUCT if
-    0= addr if.END and /jnz
-    MACROEND
-    TESTCASE if "1 if 88 then" "88"
-    TESTCASE if "0 if 88 then" ""
-    TESTCASE if "1 if 88 else 99 then" "88"
-    TESTCASE if "0 if 88 else 99 then" "99"
+Macro ! /Stw /Pop EndMacro
 
-MACRO Else 
-    addr if.ENDELSE /jnz label if.END
-    MACROEND
+Macro +! dup -rot @ + swap ! EndMacro
+    TestCase +! "" Variable Test_+! EndTestCase
+    TestCase +! "2" 1 Test_+! ! 1 Test_+! +! Test_+! @ EndTestCase
+    TestCase +! "7" 5 Test_+! ! 2 Test_+! +! Test_+! @ EndTestCase
 
-MACRO Then 
-    LABEL if.ENDELSE LABEL if.END STRUCTEND if
-    MACROEND
+Macro "If"
+    Struct "If"
+    0= ADDR If.END and /jnz
+    EndMacro
+    TestCase "If" "88" 1 If 88 then EndTestCase
+    TestCase "If" "" 0 If 88 then EndTestCase
+    TestCase "If" "88" 1 If 88 else 99 then EndTestCase
+    TestCase "If" "99" 0 If 88 else 99 then EndTestCase
 
-MACRO Exit 
+Macro "Else"
+    ADDR If.ENDELSE /jnz LABEL If.END
+    EndMacro
+
+Macro "Then"
+    LABEL If.ENDELSE LABEL If.END 
+	EndStruct "If"
+    EndMacro
+
+Macro "Exit"
     ADDR Definition.EXIT @ code /jnz
-    MACROEND
+    EndMacro
 
-MACRO do 
-    STRUCT do
-    _LOOP_RS_ @ _take3_ _RS_ @ _LOOP_RS_ !
-    label do.START
-    _R2_ @ _R1_ @ >= addr do.END and /jnz
-    MACROEND
-    PREREQUISITE do ReturnStackCode
-    TESTCASE do "5 0 do I loop" "0 1 2 3 4"
-    TESTCASE do "5 1 do I loop" "1 2 3 4"
+Macro "Do"
+    Struct "Do"
+    _LOOP_RS_ @ _Take3_ _RS_ @ _LOOP_RS_ !
+    LABEL Do.START
+    _R2_ @ _R1_ @ >= ADDR Do.END and /jnz
+    EndMacro
+    Prerequisite "Do" ReturnStackCode
+    TestCase "Do" "0 1 2 3 4" 5 0 Do I Loop EndTestCase
+    TestCase "Do" "1 2 3 4" 5 1 Do I Loop EndTestCase
 
-MACRO Loop
-    1 _R2_ @ + _R2_ ! addr do.START /jnz
-    label do.END _R3_ @ _LOOP_RS_ ! _drop3_ 
-    STRUCTEND do
-    MACROEND
+Macro "Loop"
+    1 _R2_ @ + _R2_ ! ADDR Do.START /jnz
+    LABEL Do.END _R3_ @ _LOOP_RS_ ! _drop3_ 
+    EndStruct "Do"
+    EndMacro
 
-MACRO +Loop 
-    _R2_ @ + _R2_ ! addr do.START /jnz 
-    label do.END _R3_ @ _LOOP_RS_ ! _drop3_ 
-    STRUCTEND do
-    MACROEND
-    TESTCASE +loop "5 0 do I 2 +loop" "0 2 4"
+Macro "+Loop"
+    _R2_ @ + _R2_ ! ADDR Do.START /jnz 
+    LABEL Do.END _R3_ @ _LOOP_RS_ ! _drop3_ 
+    EndStruct "Do"
+    EndMacro
+    TestCase "+Loop" "0 2 4" 5 0 Do I 2 +Loop EndTestCase
 
-MACRO unloop
+Macro unloop
     _drop3_ 
-    MACROEND
+    EndMacro
 
-MACRO I 
+Macro I 
     _LOOP_RS_ @ 1 - @
-    MACROEND
+    EndMacro
 
-MACRO J 
+Macro J 
     _LOOP_RS_ @ 2 - @ 1 - @
-    MACROEND
-    TESTCASE do "2 0 do 12 10 do J I loop loop" "0 10 0 11 1 10 1 11"
+    EndMacro
+    TestCase Do "0 10 0 11 1 10 1 11" 2 0 Do 12 10 Do J I Loop Loop EndTestCase
 
-MACRO Leave 
-    addr do.END /jnz
-    MACROEND
+Macro Leave 
+    ADDR Do.END /jnz
+    EndMacro
 
-MACRO Begin 
-    STRUCT Begin
-    label begin
-    MACROEND
-    TESTCASE begin "5 begin dup 0<> while dup 1 - repeat" "5 4 3 2 1 0"
-    TESTCASE begin "5 begin dup 1 - dup 0= until"         "5 4 3 2 1 0"
+Macro "Begin"
+    Struct "Begin"
+    LABEL Begin.Start
+    EndMacro
+    TestCase "Begin" "5 4 3 2 1 0" 5 Begin dup 0<> While dup 1 - repeat EndTestCase
+    TestCase "Begin" "5 4 3 2 1 0" 5 Begin dup 1 - dup 0= until EndTestCase
 
-MACRO Again 
-    addr begin /jnz 
-	STRUCTEND begin
-    MACROEND
+Macro "Again"
+    ADDR Begin.Start /jnz 
+	EndStruct "Begin"
+    EndMacro
 
-MACRO Until 
-    0= addr begin and /jnz 
-	STRUCTEND begin
-    MACROEND
+Macro "Until"
+    0= ADDR Begin.Start and /jnz 
+	EndStruct "Begin"
+    EndMacro
 
-MACRO While 
-    STRUCT While
-    0= addr while and /jnz
-    MACROEND
+Macro "While"
+    Struct "While"
+    0= ADDR While.End and /jnz
+    EndMacro
 
-MACRO Repeat 
-    addr begin /jnz label while 
-	STRUCTEND while 
-	STRUCTEND begin
-    MACROEND
+Macro "Repeat" 
+    ADDR Begin.Start /jnz LABEL While.End 
+	EndStruct "While"
+	EndStruct "Begin"
+    EndMacro
 
-MACRO Case 
-    STRUCT Case
+Macro "Case" 
+    Struct "Case"
     _Take1_
-    MACROEND
-    PREREQUISITE Case ReturnStackCode
-    TESTCASE case "0 case 1 of 10 endof 2 of 20 20 endof endcase" " "
-    TESTCASE case "1 case 1 of 10 endof 2 of 20 20 endof endcase" "10"
-    TESTCASE case "2 case 1 of 10 endof 2 of 20 20 endof endcase" "20 20"
+    EndMacro
+    Prerequisite "Case" ReturnStackCode
+    TestCase "Case" " "  0 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase EndTestCase
+    TestCase "Case" "10" 1 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase EndTestCase
+    TestCase "Case" "20 20" 2 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase EndTestCase
 
-MACRO Of 
-    STRUCT Of
-    _R1_ @ <> addr of.END and /jnz
-    MACROEND
+Macro "Of" 
+    Struct "Of"
+    _R1_ @ <> ADDR Of.END and /jnz
+    EndMacro
 
-MACRO EndOf 
-    addr case.END /jnz label of.END 
-	STRUCTEND of
-    MACROEND
+Macro "EndOf"
+    ADDR Case.END /jnz LABEL Of.END 
+	EndStruct "Of"
+    EndMacro
 
-MACRO EndCase 
-    label case.END _drop1_ 
-	STRUCTEND case
-    MACROEND
+Macro "EndCase"
+    LABEL Case.END _drop1_ 
+	EndStruct "Case"
+    EndMacro
+

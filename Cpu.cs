@@ -53,6 +53,7 @@ namespace ForthCompiler
             }
 
             var code = _codeslots[ProgramSlot++];
+            ulong add;
 
             switch (code.Code)
             {
@@ -63,6 +64,8 @@ namespace ForthCompiler
                     break;
                 case Code.Stw:
                     Heap[_top] = _next;
+                    _top = _next;
+                    _next = Stack.Pop();
                     break;
                 case Code.Psh:
                     Stack.Push(_next);
@@ -83,47 +86,47 @@ namespace ForthCompiler
                     _top = _next;
                     _next = Stack.Pop();
                     break;
-                case Code.Cnz:
-                    if (_top != 0)
-                    {
-                        var temp = (ProgramSlot + 7) / 8;
-                        ProgramSlot = _top * 8;
-                        _top = temp;
-                    }
-                    else
-                    {
-                        _top = _next;
-                        _next = Stack.Pop();
-                    }
-                    break;
-                case Code.Adc:
-                    var adc = (long)_next + _top + (_carry ? 1 : 0);
-                    _carry = adc > int.MaxValue || adc < int.MinValue;
-                    _next = unchecked((int)adc);
+                case Code.Jsr:
+                    var temp = (ProgramSlot + 7) / 8;
+                    ProgramSlot = _top * 8;
+                    _top = temp;
                     break;
                 case Code.Add:
-                    var add = (long)_next + _top;
-                    _carry = add > int.MaxValue || add < int.MinValue;
-                    _next = unchecked((int)add);
+                    add = (ulong)unchecked((uint)_next) + unchecked((uint)_top);
+                    _carry = (add & (1ul << 32)) != 0;
+                    _top = unchecked((int)add);
+                    _next = Stack.Pop();
+                    break;
+                case Code.Adc:
+                    add = (ulong)unchecked((uint)_next) + unchecked((uint)_top) + (_carry ? 1u : 0);
+                    _carry = (add & (1ul << 32)) != 0;
+                    _top = unchecked((int)add);
+                    _next = Stack.Pop();
                     break;
                 case Code.Sub:
-                    _next -= _top;
-                    _carry = _next < 0;
+                    add = (ulong)unchecked((uint)_next) + ~unchecked((uint)_top) + 1;
+                    _carry = (add & (1ul << 32)) != 0;
+                    _top = unchecked((int)add);
+                    _next = Stack.Pop();
                     break;
                 case Code.And:
-                    _next &= _top;
+                    _top &= _next;
+                    _next = Stack.Pop();
                     break;
                 case Code.Xor:
-                    _next ^= _top;
+                    _top ^= _next;
+                    _next = Stack.Pop();
                     break;
                 case Code.Lsr:
                     _carry = (_top & 1) == 1;
-                    _next = _top >> 1;
+                    _top = _top >> 1;
                     break;
                 case Code.Zeq:
-                    _next = _top == 0 ? -1 : 0;
+                    _top = _top == 0 ? -1 : 0;
                     break;
                 case Code.Lit:
+                    Stack.Push(_next);
+                    _next = _top;
                     _top = code.Value;
                     break;
             }
@@ -158,7 +161,7 @@ namespace ForthCompiler
                     break;
                 }
 
-                if (_codeslots[lastSlot].Code == Code.Cnz && _definitions.ContainsKey(ProgramSlot))
+                if (_codeslots[lastSlot].Code == Code.Jsr && _definitions.ContainsKey(ProgramSlot))
                 {
                     var next = Enumerable.Range(0, _codeslots.Length).Skip(lastSlot / 8 * 8 + 8).First(cs => _codeslots[cs] != null);
                     CallStack.Push(new Structure { Name = _definitions[ProgramSlot], Next = next });

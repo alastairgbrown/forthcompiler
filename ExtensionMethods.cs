@@ -12,7 +12,7 @@ namespace ForthCompiler
             return string.Compare(a, b, StringComparison.OrdinalIgnoreCase) == 0;
         }
 
-        public static T MakeEntry<TD,T>(this Dictionary<string,TD> dict,  string key, Func<T> createFunc, bool exclusive = false) where T : TD
+        public static T Entry<TD,T>(this Dictionary<string,TD> dict,  string key, Func<T> createFunc, bool exclusive = false) where T : TD
         {
             TD entry;
 
@@ -31,10 +31,9 @@ namespace ForthCompiler
             return t;
         }
 
-
         public static Structure Pop(this Stack<Structure> stack, string name)
         {
-            if (!stack.Any() || string.Compare(stack.Peek().Name, name, StringComparison.OrdinalIgnoreCase) != 0)
+            if (!stack.Any() || !stack.Peek().Name.IsEqual(name))
             {
                 throw new Exception($"Missing close for {name}");
             }
@@ -42,29 +41,14 @@ namespace ForthCompiler
             return stack.Pop();
         }
 
-        public static IEnumerable<Code> ToCodes(this int value)
-        {
-            var uvalue = unchecked ((uint) value);
-
-            for (int i = 0; i < 8; i++)
-            {
-                yield return (Code)((uvalue >> (i*4)) & 0xF);
-            }
-        }
-
-        public static int FromCodes(this IEnumerable<Code> codes)
-        {
-            return codes.Select((c, i) => ((int) c) << (i*4)).Sum();
-        }
-
         public static bool Contains(this ISlotRange token, int slot)
         {
             return slot >= token.CodeSlot && slot < token.CodeSlot + token.CodeCount;
         }
 
-        public static void Add<T>(this Stack<T> stack, T item)
+        public static string Dequote(this string text)
         {
-            stack.Push(item);
+            return text.Trim('"');
         }
     }
 }

@@ -28,6 +28,7 @@ namespace ForthCompiler
         private ObservableCollection<HeapItem> HeapItems { get; } = new ObservableCollection<HeapItem>();
         private ObservableCollection<CallStackItem> CallStackItems { get; } = new ObservableCollection<CallStackItem>();
 
+
         public DebugWindow(Compiler compiler, bool test)
         {
             InitializeComponent();
@@ -57,7 +58,7 @@ namespace ForthCompiler
                 SourceItems.Last().Tokens.Add(token);
             }
 
-            RestartButton_Click(null, null);
+            Restart_Click(null, null);
 
             if (compiler.Error != null)
             {
@@ -69,7 +70,7 @@ namespace ForthCompiler
             }
             else if (test)
             {
-                RunTestsButton_Click(null, null);
+                RunTests_Click(null, null);
             }
         }
 
@@ -103,9 +104,12 @@ namespace ForthCompiler
             foreach (var item in Cpu.CallStack)
             {
                 CallStackItems.Add(new CallStackItem {Parent = this, Item = item});
-                CallStackItems.Last().Refresh();
             }
 
+            if (SourceItems.Any(si => si.Contains(Cpu.ProgramSlot)))
+            {
+                SourceListBox.ScrollIntoView(SourceItems.First(si => si.Contains(Cpu.ProgramSlot)));
+            }
         }
 
         public string Formatter(int i)
@@ -115,7 +119,7 @@ namespace ForthCompiler
 
         private void Run(Func<int, bool> breakCondition)
         {
-            var start = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+            var start = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramSlot));
 
             _breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeSlot));
             Cpu.Run(breakCondition);
@@ -124,46 +128,46 @@ namespace ForthCompiler
         }
 
 
-        private void StepAsmButton_Click(object sender, RoutedEventArgs e)
+        private void StepAsm_Click(object sender, RoutedEventArgs e)
         {
             Run(i => true);
         }
 
-        private void StepTokenButton_Click(object sender, RoutedEventArgs e)
+        private void StepToken_Click(object sender, RoutedEventArgs e)
         {
             var token = Compiler.Tokens.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
 
             Run(i => !token.Contains(Cpu.ProgramSlot));
         }
 
-        private void StepOverButton_Click(object sender, RoutedEventArgs e)
+        private void StepOver_Click(object sender, RoutedEventArgs e)
         {
-            var line = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+            var line = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramSlot));
             var callstack = Cpu.CallStack.Count;
 
             Run(i => line == null || (!line.Contains(Cpu.ProgramSlot) && Cpu.CallStack.Count <= callstack) || _breaks.Contains(Cpu.ProgramSlot));
         }
 
-        private void StepIntoButton_Click(object sender, RoutedEventArgs e)
+        private void StepInto_Click(object sender, RoutedEventArgs e)
         {
-            var line = SourceItems.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+            var line = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramSlot));
 
             Run(i => line == null || !line.Contains(Cpu.ProgramSlot) || _breaks.Contains(Cpu.ProgramSlot));
         }
 
-        private void StepOutButton_Click(object sender, RoutedEventArgs e)
+        private void StepOut_Click(object sender, RoutedEventArgs e)
         {
             var callstack = Cpu.CallStack.Count;
 
             Run(i => Cpu.CallStack.Count < callstack || _breaks.Contains(Cpu.ProgramSlot));
         }
 
-        private void RunButton_Click(object sender, RoutedEventArgs e)
+        private void Run_Click(object sender, RoutedEventArgs e)
         {
             Run(i => i > 0 && _breaks.Contains(Cpu.ProgramSlot));
         }
 
-        private void RestartButton_Click(object sender, RoutedEventArgs e)
+        private void Restart_Click(object sender, RoutedEventArgs e)
         {
             Cpu = new Cpu(Compiler) { Formatter = Formatter };
 
@@ -171,7 +175,7 @@ namespace ForthCompiler
             Refresh(si => true, hi => true);
         }
 
-        private void RunTestsButton_Click(object sender, RoutedEventArgs e)
+        private void RunTests_Click(object sender, RoutedEventArgs e)
         {
             var tests = SourceItems.Any(si => si.Break) ? SourceItems.Where(si => si.Break).ToArray() : SourceItems.ToArray();
             var results = new Dictionary<string, int> { { "PASS", 0 }, { "FAIL", 0 } };
@@ -235,6 +239,5 @@ namespace ForthCompiler
 
             Refresh(si => true, hi => true);
         }
-
     }
 }
