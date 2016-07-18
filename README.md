@@ -20,8 +20,10 @@ D         | LSR      | Logic Shift Right      | cf = (top & 0x1); top = (top >> 
 E         | ZEQ      | Equal Zero Test        | if (top==0){top = 0xfffff...ff;} else {top = 0x0;}
 F         | LIT      | Push Literal           | push; top = mem(pc);pc = pc + 1;
 
-push defined as : mem(sp+1) = next; next = top; sp = sp + 1;
-pop defined as  : top = next; next = mem(sp); sp = sp - 1;
+----------------|-------------------------------------------|
+push defined as |mem(sp+1) = next; next = top; sp = sp + 1; |
+pop defined as  | top = next; next = mem(sp); sp = sp - 1;  |
+----------------|-------------------------------------------|
 
 ## Test cases
 
