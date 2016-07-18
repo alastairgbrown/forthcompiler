@@ -1,0 +1,261 @@
+<HTML>
+<HEAD>
+<META NAME="GENERATOR" Content="Microsoft Developer Studio">
+<META HTTP-EQUIV="Content-Type" content="text/html; charset=iso-8859-1">
+<TITLE>Document Title</TITLE>
+</HEAD>
+<BODY>
+
+<hr>
+<h1>General Features</h1>
+
+<ul>
+<li>	Is a general compiler, apart from simulation, contains nothing specific 
+	to the four instruction architecture.
+<li>	Four instruction architecture is defined in FIC_Base.inc .
+<li>	Allows an unlimited number of symbols that each hold a 64 bit signed integer.
+<li>	Allows an unlimited number of parameterised macros to be defined.
+<li>	Macro Defintions can can be nested.
+<li>	Macros and Symbols can be arrrayed/indexed.
+<li>	Case insensitive.
+<li>	N pass compiler (N defined in PASSES, current pass in PASS)
+<li>	Simulator has tested most features.
+</ul>
+
+<hr>
+<h1>Commands</h1>
+
+<hr>
+
+<font color=green><pre>
+#define [MacroName] [ [ARG1] [,[ARG2]]... ] 
+	{
+	[BLOCK]
+	}
+</pre></font>
+<blockquote>
+
+	Defines a parameterised macro. Arguments are literally included.<br><br>
+	
+	EG If we have<br>
+
+	#define STW X { out ROM, INSTR_STW + (X); }<br>
+
+	Then<br>
+
+	STW PC;<br>
+
+	Expands to<br>
+
+	out ROM, INSTR_STW + (PC);<br><br>
+
+	argc always contains the number of arguments passed to the macro.
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+[MacroName] [ [ARG1] [, [ARG2] ]... ] ;
+</pre></font>
+<blockquote>
+
+	Expands Macro [MacroName] with given arguments.
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+#if ( [Condition] ) 
+	{
+	[Block]
+	}
+</pre></font>
+<blockquote>
+
+	Executes block once if condition evaluates to true (1)
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+while ( [Condition] ) 
+	{
+	[Block]
+	}
+</pre></font>
+<blockquote>
+
+	Executes block repeatedly while condition evaluates to true (1)
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+message [symbol] ;
+</pre></font>
+<blockquote>
+
+	Outputs value of symbol;
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+error [message]
+</pre></font>
+<blockquote>
+
+	Outputs message and halts compilation.
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+dump [StartExpression], [StopExpression];
+</pre></font>
+<blockquote>
+
+	Outputs memory map in address = value CRLF format 
+	from (start) to (stop - 1) inclusive.
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+out	[symbol], [expression];
+</pre></font>
+<blockquote>
+
+	Places result of [expression] into memory map at [symbol],
+	then increments [symbol].
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+#include "[filename]"
+</pre></font>
+<blockquote>
+	
+	Recursively includes [filename]
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+simulate;
+</pre></font>
+<blockquote>
+
+	Simulates four instruction machine.
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+stop;
+</pre></font>
+
+<blockquote>
+	Halts compilation.
+
+</blockquote>
+<hr>
+
+<font color=green><pre>
+[Symbol] = [Expression];
+</pre></font>
+<blockquote>
+
+	Evaluates [Expression], and assigns result to [symbol];
+
+</blockquote>
+<hr>
+
+<h1>Expressions</h1>
+
+The following C binary operators are supported:<br>
+
++ - * / % == != &lt;&gt; &gt; &lt; &gt;= &lt;= &lt;&lt; &gt;&gt; & | ^ && ||<br>
+<br>
+
+The following C unary operators are supported:<br>
+
++ - !<br>
+<br>
+
+The following C values are supported for hex numbers, 
+decimal numbers and characters:<br>
+
+0xDDDD DDDD 'C'<br>
+<br>
+
+Operator precedence is NOT supported so use brackets to resolve:<br>
+
+((1 + (2 * 3)) == 6)<br>
+but<br>
+((1 +  2 * 3 ) == 9)<br>
+<br>
+
+Symbol arrays are supported:<br>
+
+A[1 + 2] == A[3]<br>
+
+<hr>
+
+<h1>Comments</h1>
+
+C++ and C comments are supported:<br>
+
+//C++ comment<br>
+/* C Comment */<br>
+
+<hr>
+<h1>FIC_BASE.INC</h1>
+
+<ul>
+<li> Declares word sizes and values for the four instructions.
+
+<li> Declares macros for:
+
+	<ul>
+	<li> Primitive simple, instructions.
+	<li> Labels
+	<li> Variables
+	<li> Writable code necessary for indexed access to memory, namely
+		MEMCPY, MEMSET, PUSH, POP, CALL and RET.
+	<li> If constructs
+	<li> Loop constructs
+	<li> Function constructs
+	</ul>
+
+<li> Partitions memory into Registers, RAM and ROM.
+
+<li> Assumes MAIN function is defined by user code, and calls it.
+
+<li> Implements a data stack (STACK_DATA) and program counter stack (STACK_PC).
+	these run into each other (STACK_DATA increases, STACK_PC decreases)
+
+<li> If, Loop and Function constructs use frames to localise jumps.
+
+<li> Jumps within functions are relative.
+
+<li> Jumps in to and out of functions are absolute.
+
+<li> Defines numbers -100 through +100 inside ROM
+	( NUM[-100] through NUM[+100] )
+</ul>
+
+<hr>
+<H1>FIC_LIB.INC</H1>
+
+Implements
+
+<li> Unsigned multiply - UMULT.
+<li> Unsigned divistion - UDIV.
+<li> Unsigned decimal output - OUTPUT_DECIMAL, uses UMULT and UDIV.
+
+<hr>
+
+</BODY>
+</HTML>
