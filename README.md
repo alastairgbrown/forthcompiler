@@ -12,8 +12,8 @@ Hex Value | Mnemonic | Description            | Dataflow
 6         | JNZ      | Jump if Next Not ZERO  | if(next!=0){pc<-top;} pop;
 7         | JSR      | Jump Subroutine        | top<->pc;
 8         | ADD      | Add                    | next<-next+top; cf<-cout; pop;
-9         | ADC      | Add with Carry         | next<-next+top; cf<-cout; pop;
-A         | SUB      | Subtract Top from Next | next<-next+top; cf<-cout; pop;
+9         | ADC      | Add with Carry         | next<-next+top+cf; cf<-cout; pop;
+A         | SUB      | Subtract Top from Next | next<-next+(~top)+1; cf<-cout; pop;
 B         | AND      | And                    | next<-next&top; pop;
 C         | XOR      | Xor                    | next<-next^top; pop;
 D         | LSR      | Logic Shift Right      | cf<-top&0x1; top<-top>>1;
