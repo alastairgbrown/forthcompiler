@@ -1,6 +1,24 @@
 # forthcompiler
 
-# my edit (sg)
+# The Current Op Code Set
+Hex Value | Mnemonic | Function
+----------|----------|---------
+0         | NOP
+1         | LDW
+2         | STW
+3         | PSH
+4         | POP
+5         | SWP
+6         | JNZ
+7         | JSR
+8         | ADD
+9         | ADC
+A         | SUB
+B         | AND
+C         | XOR
+D         | LSR
+E         | ZEQ
+F         | LIT
 
 ## Test cases
 
