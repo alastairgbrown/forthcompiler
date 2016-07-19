@@ -21,7 +21,7 @@ module nano2 #
             localparam           WIDTHS = 6;
             localparam           OPCODES = WIDTHD / 4;
             localparam           WIDTHI = OPCODES * 4;
-   enum     logic [2:0]          {FETCH, EXECUTE, STACK} fsm;
+   enum     logic [2:0]          {FETCH, EXECUTE, POPSTACK} fsm;
             logic [WIDTHD-1:0]   top, next;
             logic [WIDTHI-1:0]   ir;
             logic [WIDTHA-1:0]   pc;
@@ -51,15 +51,13 @@ module nano2 #
             wire                 OP_ALU = OP_ADD|OP_ADC|OP_SUB|OP_AND|OP_XOR|OP_LSR|OP_ZEQ;
             wire                 last_opcode = ~|ir;
             wire                 top_zero = ~|top;
-            wire                 next_zero = ~|next;
             wire                 immediate = (OP_LSR | OP_ZEQ | OP_NOP | OP_SWP | OP_JSR);
             wire                 stack_push = OP_LIT | OP_PSH | ((fsm == FETCH) & irq_event);
-            wire                 stack_pop = OP_STW | OP_POP | OP_JNZ | OP_ADD | OP_ADC | OP_SUB | OP_AND | OP_XOR;
+            wire                 stack_pop = OP_POP | OP_JNZ | OP_ADD | OP_ADC | OP_SUB | OP_AND | OP_XOR;
             wire  [WIDTHA-1:0]   stack = {STKBASE[WIDTHA-1:WIDTHS], sp + {{WIDTHS-1{stack_pop}}, (stack_pop|stack_push)}};
             wire  [WIDTHD+1:0]   adder = {1'b0, next, 1'b1} + {1'b0, top ^ {WIDTHD{OP_SUB}}, (OP_ADC & cf) | OP_SUB};
-            wire  [WIDTHD-1:0]   alu_logic = OP_AND ? next & top : next ^ top;
-            wire  [WIDTHD-1:0]   alu_result_top = OP_ADD|OP_ADC|OP_SUB ? adder[WIDTHD:1] : (OP_AND|OP_XOR ? alu_logic : top);
-            wire  [WIDTHD-1:0]   alu_result_next = OP_LSR ? {1'b0, top[WIDTHD-1:1]} : (OP_ZEQ ? {WIDTHD{top_zero}} : next);
+            wire  [WIDTHD-1:0]   alu_logic = OP_AND ? next & top : (OP_XOR ? next ^ top : (OP_LSR ? {1'b0, top[WIDTHD-1:1]} : {WIDTHD{top_zero}}));
+            wire  [WIDTHD-1:0]   alu_result = OP_ADD|OP_ADC|OP_SUB ? adder[WIDTHD:1] : alu_logic;
             wire                 alu_cout = OP_ADD|OP_ADC|OP_SUB ? adder[WIDTHD+1] : (OP_LSR ? top[0] : cf);
             
    always_ff @ (posedge clock) begin
@@ -112,51 +110,49 @@ module nano2 #
             end
             EXECUTE : begin
                ff <= 1'b0;
+               address <= OP_LDW|OP_STW ? top[WIDTHA-1:0] : stack;
                if (immediate | ((read|write) & ~waitrequest)) begin
                   address <= OP_STW ? stack : pc;
                   read <= OP_STW|OP_LIT;
                   write <= 1'b0;
-                  if (OP_LDW) begin
+                  if (OP_LDW)
                      top <= readdata;
-                  end
-                  if (OP_JSR) begin
+                  if (OP_JSR)
                      top <= pc;
+                  if (OP_JSR | (OP_JNZ & ~top_zero))
                      pc <= top[WIDTHA-1:0];
-                  end
-                  if (OP_ALU) begin
-                     top <= alu_result_top;
-                     next <= alu_result_next;
-                     cf <= alu_cout;
-                  end
-                  if (OP_JNZ & next_zero) begin
-                     pc <= top[WIDTHA-1:0];
-                  end
-                  sp <= stack[WIDTHS-1:0];
-                  if (stack_pop) begin
-                     top <= next;
-                     next <= readdata;
-                  end
-                  if (stack_push) begin
+                  if (OP_ALU)
+                     top <= alu_result;
+                  else
+                     if (OP_SWP|stack_pop)
+                        top <= next;
+                  if (stack_push|OP_SWP) begin
                      next <= top;
                   end
-                  if (OP_PSH|OP_POP|OP_LDW|OP_NOP|OP_ALU|OP_JSR|OP_JNZ) begin
+                  if (OP_ALU)
+                     cf <= alu_cout;
+                  if (stack_pop)
+                     next <= readdata;
+                  sf <= OP_SWP ? {sf[0], 1'b1} : 2'b00;
+                  sp <= stack[WIDTHS-1:0];
+                  if (OP_LIT|OP_STW) begin
+                     fsm <= POPSTACK;
+                  end
+                  else begin
                      ir <= next_ir;
-                     if (last_opcode|OP_JSR|(OP_JNZ&~top_zero)) begin
+                     if (last_opcode|OP_JSR|(OP_JNZ & ~top_zero)) begin
                         fsm <= FETCH;
                      end
                   end
-                  else begin
-                     fsm <= STACK;
-                  end
                end
                else begin
-                  read <= OP_LDW|OP_POP|OP_JNZ|OP_ADC|OP_ADD|OP_SUB|OP_AND|OP_XOR;
-                  write <= OP_STW|OP_PSH;
-                  address <= OP_LDW|OP_STW ? top[WIDTHA-1:0] : stack;
+                  read <= OP_LDW|stack_pop;
+                  write <= OP_STW|stack_push;
                end
             end
-            STACK : begin
-               if ((read|write) & ~waitrequest) begin
+            POPSTACK : begin
+               address <= stack;
+               if (read & ~waitrequest) begin
                   read <= 1'b0;
                   sp <= stack[WIDTHS-1:0];
                   if (OP_LIT) begin
@@ -168,7 +164,10 @@ module nano2 #
                      next <= readdata;
                   end
                   ir <= next_ir;
-                  fsm <= last_opcode ? FETCH : EXECUTE;
+                  if (last_opcode)
+                     fsm <= FETCH;
+                  else
+                     fsm <= EXECUTE;
                end
                else begin
                   read <= 1'b1;
