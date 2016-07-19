@@ -87,14 +87,14 @@ Macro 0<> /Zeq /Zeq EndMacro
     TestCase 0<> "0" 0 0<> EndTestCase
     TestCase 0<> "-1" 1 0<> EndTestCase
 
-Macro _-ve $80000000 - /psh /xor /psh /adc EndMacro
-	TestCase _-ve 1 -2 _-ve EndTestCase
-	TestCase _-ve 1 -1 _-ve EndTestCase
-	TestCase _-ve 0 0 _-ve EndTestCase
-	TestCase _-ve 0 1 _-ve EndTestCase
-	TestCase _-ve 0 2 _-ve EndTestCase
+Macro _IsNegative $80000000 - /psh /xor /psh /adc EndMacro
+	TestCase _IsNegative 1 -2 _IsNegative EndTestCase
+	TestCase _IsNegative 1 -1 _IsNegative EndTestCase
+	TestCase _IsNegative 0 0 _IsNegative EndTestCase
+	TestCase _IsNegative 0 1 _IsNegative EndTestCase
+	TestCase _IsNegative 0 2 _IsNegative EndTestCase
 
-Macro < - _-ve 0<> EndMacro
+Macro < - _IsNegative 0<> EndMacro
     TestCase < "-1" 0 1 < EndTestCase
     TestCase < "0" 1 0 < EndTestCase
     TestCase < "0" 1 1 < EndTestCase
@@ -109,7 +109,7 @@ Macro <= swap >= EndMacro
     TestCase <= "0" 1 0 <= EndTestCase
     TestCase <= "-1" 1 1 <= EndTestCase
 
-Macro >= - _-ve 0= EndMacro
+Macro >= - _IsNegative 0= EndMacro
     TestCase >= "0" 0 1 >= EndTestCase
     TestCase >= "-1" 1 0 >= EndTestCase
     TestCase >= "-1" 1 1 >= EndTestCase
@@ -271,7 +271,7 @@ Macro I
 Macro J 
     _LOOP_RS_ @ 2 - @ 1 - @
     EndMacro
-    TestCase Do "0 10 0 11 1 10 1 11" 2 0 Do 12 10 Do J I Loop Loop EndTestCase
+    TestCase "I+J" "0 10 0 11 1 10 1 11" 2 0 Do 12 10 Do J I Loop Loop EndTestCase
 
 Macro Leave 
     ADDR Do.END /jnz

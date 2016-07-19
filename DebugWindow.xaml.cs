@@ -21,6 +21,7 @@ namespace ForthCompiler
         public Compiler Compiler { get; }
 
         public Cpu Cpu { get; set; }
+        public int ProgramSlot { get; set; }
 
         private HashSet<int> _breaks;
 
@@ -100,15 +101,23 @@ namespace ForthCompiler
                 item.Refresh();
             }
 
-            CallStackItems.Clear();
-            foreach (var item in Cpu.CallStack)
+            while (CallStackItems.Count < Cpu.CallStack.Count)
             {
-                CallStackItems.Add(new CallStackItem {Parent = this, Item = item});
+                CallStackItems.Add(new CallStackItem { Parent = this });
+            }
+            while (CallStackItems.Count > Cpu.CallStack.Count)
+            {
+                CallStackItems.RemoveAt(0);
+            }
+            for (int i = 0; i < CallStackItems.Count; i++)
+            {
+                CallStackItems[i].Item = Cpu.CallStack.ElementAt(i);
+                CallStackItems[i].Refresh();
             }
 
-            if (SourceItems.Any(si => si.Contains(Cpu.ProgramSlot)))
+            if (SourceItems.Any(si => si.Contains(ProgramSlot)))
             {
-                SourceListBox.ScrollIntoView(SourceItems.First(si => si.Contains(Cpu.ProgramSlot)));
+                SourceListBox.ScrollIntoView(SourceItems.First(si => si.Contains(ProgramSlot)));
             }
         }
 
@@ -124,7 +133,8 @@ namespace ForthCompiler
             _breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeSlot));
             Cpu.Run(breakCondition);
 
-            Refresh(si => si == start || si.Contains(Cpu.ProgramSlot), hi => hi.IsChanged);
+            ProgramSlot = Cpu.ProgramSlot;
+            Refresh(si => si == start || si.Contains(ProgramSlot), hi => hi.IsChanged);
         }
 
 
@@ -238,6 +248,15 @@ namespace ForthCompiler
             menuItems.ForEach(mi => mi.IsChecked = ReferenceEquals(mi, sender));
 
             Refresh(si => true, hi => true);
+        }
+
+        private void CallStackListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (CallStackListBox.SelectedItem != null)
+            {
+                ProgramSlot = ((CallStackItem)CallStackListBox.SelectedItem).Item.Value;
+                Refresh(si => Cpu.CallStack.Any(csi => si.Contains(csi.Value)), hi => hi.IsChanged);
+            }
         }
     }
 }

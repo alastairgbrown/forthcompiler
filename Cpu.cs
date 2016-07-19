@@ -30,7 +30,7 @@ namespace ForthCompiler
                                           .ToDictionary(l => l.Value.CodeSlot, l => l.Key);
             Heap = new int[compiler.HeapSize];
             LastHeap = new int[compiler.HeapSize];
-            CallStack.Push(new Structure { Name = "Global.Global.0", Next = int.MaxValue });
+            CallStack.Push(new Structure { Name = "Global.Global.0", Value = int.MaxValue });
         }
 
         public IEnumerable<string> ThisState => new[]
@@ -163,10 +163,11 @@ namespace ForthCompiler
 
                 if (_codeslots[lastSlot].Code == Code.Jsr && _definitions.ContainsKey(ProgramSlot))
                 {
-                    var next = Enumerable.Range(0, _codeslots.Length).Skip(lastSlot / 8 * 8 + 8).First(cs => _codeslots[cs] != null);
-                    CallStack.Push(new Structure { Name = _definitions[ProgramSlot], Next = next });
+                    var next = Enumerable.Range(0, _codeslots.Length).Skip(_top * 8).First(cs => _codeslots[cs] != null);
+                    CallStack.Peek().Value = next;
+                    CallStack.Push(new Structure { Name = _definitions[ProgramSlot] });
                 }
-                else if (ProgramSlot == CallStack.Peek().Next)
+                else if (CallStack.Count >= 2 && ProgramSlot == CallStack.Skip(1).First().Value)
                 {
                     CallStack.Pop();
                 }

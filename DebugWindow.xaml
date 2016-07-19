@@ -72,6 +72,6 @@
         <Label x:Name="CpuLabel" Content="Label" Height="40" VerticalAlignment="Top" FontFamily="Consolas"  Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Grid.RowSpan="2"/>
         <ListBox x:Name="HeapListBox" ItemTemplate="{DynamicResource HeapItemTemplate}" Grid.Row="2" Grid.Column="0"/>
         <ListBox x:Name="SourceListBox" ItemTemplate="{DynamicResource SourceItemTemplate}" Grid.Row="2" Grid.Column="1" Grid.RowSpan="2"/>
-        <ListBox x:Name="CallStackListBox" ItemTemplate="{DynamicResource CallStackItemTemplate}" Grid.Row="3" Grid.Column="0"/>
+        <ListBox x:Name="CallStackListBox" ItemTemplate="{DynamicResource CallStackItemTemplate}" Grid.Row="3" Grid.Column="0" SelectionChanged="CallStackListBox_SelectionChanged"/>
     </Grid>
 </Window>

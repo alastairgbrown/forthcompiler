@@ -400,19 +400,23 @@ namespace ForthCompiler
         private void CommentBracket()
         {
             var start = Token;
-            while (Token.Text != ")")
+            for  (;Token.Text != ")"; ++_tokenIndex)
             {
-                Tokens[++_tokenIndex].DictEntry = start.DictEntry;
+                Token.TokenType = TokenType.Excluded;
+                Token.DictEntry = start.DictEntry;
             }
+            Token.TokenType = TokenType.Excluded;
+            Token.DictEntry = start.DictEntry;
         }
 
         [Method("\\")]
         private void CommentBackSlash()
         {
             var start = Token;
-            while (_tokenIndex < Tokens.Count && Tokens[_tokenIndex].File == start.File && Tokens[_tokenIndex].Y == start.Y)
+            for (; _tokenIndex < Tokens.Count && Tokens[_tokenIndex].File == start.File && Tokens[_tokenIndex].Y == start.Y; _tokenIndex++)
             {
-                Tokens[_tokenIndex++].DictEntry = start.DictEntry;
+                Token.TokenType = TokenType.Excluded;
+                Token.DictEntry = start.DictEntry;
             }
 
             _tokenIndex--;
@@ -571,7 +575,6 @@ namespace ForthCompiler
     {
         public string Name { get; set; }
         public int Value { get; set; }
-        public int Next { get; set; }
     }
 
     public enum DictType
