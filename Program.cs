@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 
 /*
 valid opcodes (5 bit)
@@ -84,7 +85,7 @@ namespace ForthCompiler
                 var argMap = Enumerable.Range(0, args.Length)
                                  .Where(i => args[i].StartsWith("-"))
                                  .ToDictionary(i => args[i], i => i + 1 < args.Length ? args[i + 1] : null, StringComparer.OrdinalIgnoreCase);
-                var test = argMap.ContainsKey("-test") || args.Length == 0;
+                var testcases = argMap.ContainsKey("-testcases") || args.Length == 0;
                 var debug = argMap.ContainsKey("-debug") || args.Length == 0;
                 var compiler = new Compiler();
 
@@ -92,9 +93,16 @@ namespace ForthCompiler
                 {
                     compiler.ReadFile(0, argMap["-f"], y => y, x => x, File.ReadAllLines(argMap["-f"]));
                 }
-                else if (test)
+                else if (testcases)
                 {
                     compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.TestCases.Values);
+                }
+
+                if (args.Length == 0)
+                {
+                    var name = Assembly.GetExecutingAssembly().GetName().Name;
+                    Console.WriteLine($"Usage:");
+                    Console.WriteLine($"   {name} [-f filename] [-mif mifFilename] [-debug] [-testcases]");
                 }
 
                 compiler.Parse();
@@ -108,7 +116,7 @@ namespace ForthCompiler
 
                 if (debug)
                 {
-                    new DebugWindow(compiler, test).ShowDialog();
+                    new DebugWindow(compiler, testcases).ShowDialog();
                 }
             }
             catch (NotSupportedException ex)

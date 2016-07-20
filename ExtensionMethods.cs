@@ -41,13 +41,13 @@ namespace ForthCompiler
             }
         }
 
-        public static TV Entry<TK, TV>(this IDictionary<TK, TV> dict, TK key)
+        public static TV At<TK, TV>(this IDictionary<TK, TV> dict, TK key)
         {
             TV value;
             return dict.TryGetValue(key, out value) ? value : default(TV);
         }
 
-        public static T Entry<TD, T>(this Dictionary<string, TD> dict, string key, Func<T> createFunc, bool exclusive = false) where T : TD
+        public static T At<TD, T>(this Dictionary<string, TD> dict, string key, Func<T> createFunc, bool exclusive = false) where T : TD
         {
             TD entry;
 

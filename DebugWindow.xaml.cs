@@ -65,15 +65,19 @@ namespace ForthCompiler
 
         private void Refresh(Func<SourceItem, bool> refreshSource = null, Func<HeapItem, bool> refreshHeap = null)
         {
-            var last = Cpu.LastState ?? Cpu.ThisState.ToArray();
-            var curr = Cpu.ThisState.ToArray();
+            var last = Cpu.LastState ?? Cpu.CurrState.ToArray();
+            var curr = Cpu.CurrState.ToArray();
 
             Array.Resize(ref last, Math.Max(last.Length, curr.Length));
             Array.Resize(ref curr, Math.Max(last.Length, curr.Length));
 
             Status.Inlines.Clear();
             Status.Inlines.AddRange(Enumerable.Range(0, curr.Length).Select(
-                    i => new Run { Text = curr[i] ?? "-", Foreground = curr[i] == last[i] ? Brushes.Black : Brushes.Red }));
+                    i => new Run
+                    {
+                        Text = curr[i] == null ? "-" : curr[i] is int ? Formatter((int)curr[i]) : $"{curr[i]}",
+                        Foreground = curr[i] == last[i] ? Brushes.Black : Brushes.Red
+                    }));
 
             foreach (var item in SourceItems.Where(si => refreshSource == null || refreshSource(si)))
             {
@@ -164,7 +168,7 @@ namespace ForthCompiler
 
         private void Restart_Click(object sender, RoutedEventArgs e)
         {
-            Cpu = new Cpu(Compiler) { Formatter = Formatter };
+            Cpu = new Cpu(Compiler);
 
             HeapItems.Clear();
             foreach (var variable in Compiler.Dict.Select(v => new { v.Key, Value = v.Value as VariableEntry }).Where(v => v.Value != null))
@@ -205,6 +209,7 @@ namespace ForthCompiler
                 results[result]++;
             }
 
+            ProgramSlot = Cpu.ProgramSlot;
             Refresh();
 
             Status.Inlines.Clear();

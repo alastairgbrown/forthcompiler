@@ -35,16 +35,16 @@ namespace ForthCompiler
 
                     foreach (Match keyword in Regex.Matches(keywordlist.Value, @"\S+"))
                     {
-                        KeywordColors[keyword.Value] = brushes[name];
+                        KeywordColors[keyword.Value] = brushes.At(name) ?? Brushes.Black;
                     }
                 }
 
-                TokenColors[TokenType.Excluded] = brushes["COMMENTS"];
-                TokenColors[TokenType.Literal] = brushes["NUMBERS"];
-                TokenColors[TokenType.Constant] = KeywordColors.Entry("CONSTANT_IDENTIFIER", () => Brushes.Magenta);
-                TokenColors[TokenType.Variable] = KeywordColors.Entry("VARIABLE_IDENTIFIER", () => Brushes.Magenta);
-                TokenColors[TokenType.Definition] = KeywordColors.Entry("DEFINITION_IDENTIFIER", () => Brushes.Magenta);
-                TokenColors[TokenType.Error] = KeywordColors.Entry("ERROR_IDENTIFIER", () => Brushes.Red);
+                TokenColors[TokenType.Excluded] = brushes.At("COMMENTS") ?? Brushes.Green;
+                TokenColors[TokenType.Literal] = brushes.At("NUMBERS") ?? Brushes.Magenta;
+                TokenColors[TokenType.Constant] = KeywordColors.At("CONSTANT_IDENTIFIER") ?? Brushes.Magenta;
+                TokenColors[TokenType.Variable] = KeywordColors.At("VARIABLE_IDENTIFIER") ?? Brushes.Magenta;
+                TokenColors[TokenType.Definition] = KeywordColors.At("DEFINITION_IDENTIFIER") ?? Brushes.Magenta;
+                TokenColors[TokenType.Error] = KeywordColors.At("ERROR_IDENTIFIER") ?? Brushes.Red;
             }
             catch (Exception)
             {

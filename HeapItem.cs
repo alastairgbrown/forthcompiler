@@ -8,17 +8,17 @@ namespace ForthCompiler
 
         public int Address { get; set; }
 
+        public bool WasChanged { get; set; }
+
         public string AddressFormatted => Parent.Formatter(Address);
 
-        public string Value => Parent.Formatter(Parent.Cpu.Heap.Entry(Address));
+        public string Value => Parent.Formatter(Parent.Cpu.Heap.At(Address));
 
         public Brush ValueForeground => IsChanged ? Brushes.Red : Brushes.Black;
 
-        public Brush NameForeground => TokenColors[TokenType.Variable];
+        public Brush NameForeground => TokenColors.At(TokenType.Variable) ?? Brushes.Magenta;
 
-        public bool IsChanged => Parent.Cpu.Heap.Entry(Address) != Parent.Cpu.LastHeap.Entry(Address);
-
-        public bool WasChanged { get; set; }
+        public bool IsChanged => Parent.Cpu.Heap.At(Address) != Parent.Cpu.LastHeap.At(Address);
 
         public void Refresh()
         {

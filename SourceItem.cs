@@ -55,8 +55,7 @@ namespace ForthCompiler
                     block.Inlines.Add(new Run
                     {
                         Text = token.Text,
-                        Foreground = TokenColors.ContainsKey(token.TokenType) ? TokenColors[token.TokenType] :
-                                        KeywordColors.ContainsKey(token.Text) ? KeywordColors[token.Text] : Brushes.Black,
+                        Foreground = TokenColors.At(token.TokenType) ?? KeywordColors.At(token.Text) ?? Brushes.Black,
                         Background = current ? Brushes.LightGray : Brushes.Transparent,
                         ToolTip = Parent.Formatter(token.CodeSlot)
                     });

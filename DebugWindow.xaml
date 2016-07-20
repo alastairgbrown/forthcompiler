@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ForthCompiler"
         mc:Ignorable="d"
-        Title="MainWindow" Height="342.279" Width="766.912">
+        Title="MainWindow" Height="342.279" Width="766.912"  Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}" >
     <Window.Resources>
         <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceItem}">
             <StackPanel Orientation="Horizontal" Background="{Binding Background}" ToolTip="{Binding Tooltip}">
@@ -35,32 +35,33 @@
         <CommandBinding Command="{x:Static local:Shortcuts.StepInto}" Executed="StepInto_Click"/>
         <CommandBinding Command="{x:Static local:Shortcuts.StepOut}" Executed="StepOut_Click"/>
     </Window.CommandBindings>
-    
-    <Grid >
+
+    <Grid Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}" Margin="3">
         <Grid.RowDefinitions>
-            <RowDefinition Height="24" />
-            <RowDefinition Height="40" />
-            <RowDefinition Height="15" />
-            <RowDefinition Height="200*" />
-            <RowDefinition Height="15" />
-            <RowDefinition Height="100*" />
+            <RowDefinition Height="22" />
+            <RowDefinition Height="46" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="76*" />
+            <RowDefinition Height="9" />
+            <RowDefinition Height="39*" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="35" />
-            <ColumnDefinition Width="180" />
-            <ColumnDefinition Width="55*"/>
+            <ColumnDefinition Width="20" />
+            <ColumnDefinition Width="195" />
+            <ColumnDefinition Width="20"/>
+            <ColumnDefinition/>
         </Grid.ColumnDefinitions>
-        <Menu x:Name="ToolBar" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3">
-            <MenuItem x:Name="RestartButton" Header="R_estart" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="Restart_Click" ToolTip="Shift-F5" />
-            <MenuItem x:Name="RunButton" Header="_Run" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="Run_Click" ToolTip="F5" />
-            <MenuItem x:Name="StepAsm" Header="Step _ASM" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepAsm_Click" />
-            <MenuItem x:Name="StepToken" Header="Step _Token" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepToken_Click" />
-            <MenuItem x:Name="StepOver" Header="Step Over" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOver_Click" ToolTip="F10" />
-            <MenuItem x:Name="StepInto" Header="Step Into" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepInto_Click" ToolTip="F11" />
-            <MenuItem x:Name="StepOut" Header="Step Out" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="StepOut_Click" ToolTip="Shift-F11" />
-            <MenuItem x:Name="RunTests" Header="Run Tests" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="RunTests_Click" />
-            <MenuItem x:Name="SetPc" Header="Set PC" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}" Click="SetPc_Click" />
-            <MenuItem x:Name="View" Header="View" VerticalAlignment="Top" BorderBrush="{DynamicResource {x:Static SystemColors.ControlDarkBrushKey}}"  >
+        <Menu x:Name="ToolBar" Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="4">
+            <MenuItem x:Name="RestartButton" Header="R_estart" VerticalAlignment="Top" Click="Restart_Click" ToolTip="Shift-F5" />
+            <MenuItem x:Name="RunButton" Header="_Run" VerticalAlignment="Top" Click="Run_Click" ToolTip="F5" />
+            <MenuItem x:Name="StepAsm" Header="Step _ASM" VerticalAlignment="Top" Click="StepAsm_Click" />
+            <MenuItem x:Name="StepToken" Header="Step _Token" VerticalAlignment="Top" Click="StepToken_Click" />
+            <MenuItem x:Name="StepOver" Header="Step Over" VerticalAlignment="Top" Click="StepOver_Click" ToolTip="F10" />
+            <MenuItem x:Name="StepInto" Header="Step Into" VerticalAlignment="Top" Click="StepInto_Click" ToolTip="F11" />
+            <MenuItem x:Name="StepOut" Header="Step Out" VerticalAlignment="Top" Click="StepOut_Click" ToolTip="Shift-F11" />
+            <MenuItem x:Name="RunTests" Header="Run Tests" VerticalAlignment="Top" Click="RunTests_Click" />
+            <MenuItem x:Name="SetPc" Header="Set PC" VerticalAlignment="Top" Click="SetPc_Click" />
+            <MenuItem x:Name="View" Header="View" VerticalAlignment="Top"  >
                 <MenuItem x:Name="MacroLevel0" Header="Hide Macros" HorizontalAlignment="Left" Click="MacroLevel_Click" IsChecked="True"/>
                 <MenuItem x:Name="MacroLevel1" Header="Macro Level 1" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
                 <MenuItem x:Name="MacroLevel2" Header="Macro Level 2" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
@@ -73,16 +74,58 @@
                 <MenuItem x:Name="ShowHex" Header="Show Hex" HorizontalAlignment="Left" Width="160" IsCheckable="True" Click="Show_Click"/>
             </MenuItem>
         </Menu>
-        <Label Content="Status" Margin="0" Grid.Row="1" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704"/>
-        <ListBox Height="40" VerticalAlignment="Top" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Grid.RowSpan="2" Padding="0" BorderBrush="#FFABADB3">
+        <Label Content="Status" Margin="-8,12,189,0" Grid.Row="1" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
+            <Label.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform/>
+                    <SkewTransform/>
+                    <RotateTransform Angle="-90"/>
+                    <TranslateTransform/>
+                </TransformGroup>
+            </Label.RenderTransform>
+        </Label>
+        <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
             <TextBlock x:Name="Status" FontFamily="Consolas">Status</TextBlock>
-        </ListBox>
-        <ListBox x:Name="HeapListBox" ItemTemplate="{DynamicResource HeapItemTemplate}" Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,5,0"/>
-        <ListBox x:Name="SourceListBox" ItemTemplate="{DynamicResource SourceItemTemplate}" Grid.Row="3" Grid.Column="2" Grid.RowSpan="3"/>
-        <ListBox x:Name="CallStackListBox" ItemTemplate="{DynamicResource CallStackItemTemplate}" Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" SelectionChanged="CallStackListBox_SelectionChanged" Padding="0" Margin="0,0,5,0"/>
-        <Label Content="Heap" Margin="0" Grid.Row="2" Grid.ColumnSpan="2" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704"/>
-        <Label Content="Call Stack" Margin="0,0,5,0" Grid.Row="4" Grid.ColumnSpan="2" Grid.Column="0"
-               VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704"/>
-        <Label Content="Source" Margin="0,0,5,0" Grid.Row="2" Grid.Column="2" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704"/>
+        </Border>
+        <Border Grid.Row="3" Grid.Column="1" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
+            <ListBox x:Name="HeapListBox" ItemTemplate="{DynamicResource HeapItemTemplate}" BorderBrush="{x:Null}" Background="{x:Null}" />
+         </Border>
+        <Border Grid.Row="3" Grid.Column="3" Grid.RowSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
+            <ListBox x:Name="SourceListBox" ItemTemplate="{DynamicResource SourceItemTemplate}" BorderBrush="{x:Null}" Background="{x:Null}" />
+        </Border>
+        <Border Grid.Row="5" Grid.Column="1"  BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
+            <ListBox x:Name="CallStackListBox" ItemTemplate="{DynamicResource CallStackItemTemplate}" SelectionChanged="CallStackListBox_SelectionChanged" Padding="0" BorderBrush="{x:Null}" Background="{x:Null}"/>
+        </Border>
+        <Label Content="Heap" Grid.Row="3" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" Margin="1,32,0,0" Grid.ColumnSpan="2" HorizontalAlignment="Left" Width="31">
+            <Label.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform/>
+                    <SkewTransform/>
+                    <RotateTransform Angle="-90"/>
+                    <TranslateTransform/>
+                </TransformGroup>
+            </Label.RenderTransform>
+        </Label>
+        <Label Content="Source" Grid.Row="3" Grid.Column="2 " VerticalAlignment="Top" Height="18" Padding="0" Foreground="#FFF58704" Margin="1,39,493,0" Grid.ColumnSpan="2">
+            <Label.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform/>
+                    <SkewTransform/>
+                    <RotateTransform Angle="-90"/>
+                    <TranslateTransform/>
+                </TransformGroup>
+            </Label.RenderTransform>
+        </Label>
+        <Label Content="Call Stack" Margin="-16,21,179,0" Grid.Row="5" Grid.ColumnSpan="2" Grid.Column="0"
+               VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5">
+            <Label.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform/>
+                    <SkewTransform/>
+                    <RotateTransform Angle="-90"/>
+                    <TranslateTransform/>
+                </TransformGroup>
+            </Label.RenderTransform>
+        </Label>
     </Grid>
 </Window>

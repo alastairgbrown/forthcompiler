@@ -16,13 +16,14 @@ namespace ForthCompiler
         public List<Token> Tokens { get; } = new List<Token>();
 
         public Token Token => _tokenIndex < Tokens.Count ? Tokens[_tokenIndex] : null;
+        public Token LastToken { get; set; }
 
         public List<CodeSlot> CodeSlots { get; } = new List<CodeSlot>();
 
         public string Error { get; private set; }
 
         public Dictionary<string, IDictEntry> Dict { get; } = new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<string, IDictEntry> PreComp { get; } = new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase);
+        private Dictionary<string, IDictEntry> PreComp { get; } = new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, Label> Labels { get; } = new Dictionary<string, Label>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> TestCases { get; } = new Dictionary<string, string>();
 
@@ -30,6 +31,7 @@ namespace ForthCompiler
         private int _tokenIndex;
         private int _prerequisiteIndex;
         private readonly Stack<Structure> _structureStack = new Stack<Structure>(new[] { new Structure { Name = "Global" } });
+        private readonly List<string> _arguments = new List<string>();
 
         public Compiler()
         {
@@ -46,7 +48,6 @@ namespace ForthCompiler
                 var attribute = method.GetCustomAttribute<Method>();
 
                 attribute.Name = attribute.Name ?? method.Name;
-                attribute.MethodName = method.Name;
                 attribute.Action = (Action)Delegate.CreateDelegate(typeof(Action), this, method);
                 entries[attribute.DictType].Add(attribute.Name, attribute);
             }
@@ -86,25 +87,6 @@ namespace ForthCompiler
             yield return "END";
         }
 
-        public void Macro(string macro)
-        {
-            ReadFile(_tokenIndex + 1, Token.File, y => Token.Y, y => Token.X, new[] { $" {macro}" }, Token.MacroLevel + 1);
-        }
-
-        public void Encode(params CodeSlot[] codes)
-        {
-            foreach (var code in codes)
-            {
-                CodeSlots.Add(code);
-
-                if (CodeSlots.Count % 8 == 0)
-                {
-                    var blanks = CodeSlots.Skip(CodeSlots.Count - 8).Count(cs => cs.Code == Code.Lit) * 8;
-                    CodeSlots.AddRange(Enumerable.Range(0, blanks).Select(i => (CodeSlot)null));
-                }
-            }
-        }
-
         public void ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, IEnumerable<string> input, int macroLevel = 0)
         {
             Tokens.InsertRange(pos, input.SelectMany(
@@ -131,14 +113,15 @@ namespace ForthCompiler
 
                     if (Token.TokenType == TokenType.Literal)
                     {
-                        Encode(Convert.ToInt32(
-                                        Token.Text.Trim('$', '#', '%'),
-                                        Token.Text.StartsWith("$") ? 16 :
-                                        Token.Text.StartsWith("%") ? 2 : 10));
+                        Encode(Convert.ToInt32(Token.Text.Trim('$', '#', '%'),
+                                               Token.Text.StartsWith("$") ? 16 :
+                                               Token.Text.StartsWith("%") ? 2 : 10));
+                        LastToken = Token;
                     }
                     else if (Token.TokenType != TokenType.Excluded)
                     {
                         ParseSymbol(Dict);
+                        LastToken = Token;
                     }
                 }
 
@@ -146,13 +129,12 @@ namespace ForthCompiler
                 {
                     throw new Exception("Unpatched label " + label.Key);
                 }
-
             }
-            catch (NotSupportedException ex)
+            catch (Exception ex)
             {
-                Error = $"Error: {ex.Message}{Environment.NewLine}File: {Token?.File}({Token?.Y + 1},{Token?.X + 1})";
+                Error = $"Error: {ex.Message}{Environment.NewLine}File: {Token})";
                 Console.WriteLine(Error);
-                Tokens.Skip(_tokenIndex).ToList().ForEach(t => t.SetError());
+                Tokens.Skip(_tokenIndex).ToList().ForEach(t => t.TokenType = TokenType.Error);
             }
 
             while (CodeSlots.Count % 8 != 0)
@@ -193,28 +175,25 @@ namespace ForthCompiler
 
         private void ParseSymbol(Dictionary<string, IDictEntry> dict)
         {
-            IDictEntry dictEntry;
-            List<Token> arguments = null;
+            var dictEntry = dict.At(Token.Text);
 
-            if (!dict.TryGetValue(Token.Text, out dictEntry))
+            if (dictEntry == null)
             {
                 throw new Exception("Undefined symbol - " + Token.Text);
             }
 
+            _arguments.Clear();
             Token.CodeSlot = CodeSlots.Count;
-            Token.DictEntry = dictEntry;
             for (int i = 0; i < (dictEntry as Method)?.Arguments; i++)
             {
                 for (_tokenIndex++; Tokens[_tokenIndex].TokenType == TokenType.Excluded; _tokenIndex++)
                 {
                 }
 
-                (arguments = arguments ?? new List<Token>()).Add(Token);
+                _arguments.Add(Token.Text);
                 Token.CodeSlot = CodeSlots.Count;
-                Token.DictEntry = dictEntry;
             }
 
-            Token.Arguments = arguments;
             dictEntry.Process(this);
         }
 
@@ -229,46 +208,71 @@ namespace ForthCompiler
             return cpu;
         }
 
-        [Method(nameof(Include), Arguments = 1, DictType = DictType.PreComp)]
+        public void Macro(string macro)
+        {
+            ReadFile(_tokenIndex + 1, Token.File, y => Token.Y, y => Token.X, new[] { $" {macro}" }, Token.MacroLevel + 1);
+        }
+
+        public void Encode(CodeSlot code)
+        {
+            CodeSlots.Add(code);
+
+            if (CodeSlots.Count % 8 == 0)
+            {
+                var blanks = CodeSlots.Skip(CodeSlots.Count - 8).Count(cs => cs.Code == Code.Lit) * 8;
+                CodeSlots.AddRange(Enumerable.Range(0, blanks).Select(i => (CodeSlot)null));
+            }
+        }
+
+        [Method(Name = nameof(Include), Arguments = 1, DictType = DictType.PreComp)]
         private void IncludePrecompile()
         {
-            var filename = Token.Text.Dequote();
+            var filename = _arguments[0].Dequote();
 
             ReadFile(_tokenIndex + 1, filename, y => y, x => x, File.ReadAllLines(filename));
         }
 
-        [Method(null, Arguments = 1, DictType = DictType.Dict)]
+        [Method(Arguments = 1, DictType = DictType.Dict)]
         private void Include()
         {
         }
 
-        [Method(null)]
+        [Method]
         private void Allot()
         {
-            var cpu = Evaluate(Tokens[_tokenIndex - 2]);
+            var cpu = Evaluate(LastToken);
 
             _heapSize += cpu.ForthStack.First();
         }
 
-        string ParseBlock(string end)
+        int ParseBlock(string end)
         {
             var start = ++_tokenIndex;
-            var text = new StringBuilder();
 
             for (; !Token.Text.IsEqual(end); _tokenIndex++)
             {
-                IDictEntry comment;
-
-                if (Dict.TryGetValue(Token.Text, out comment) &&
-                    ((comment as Method)?.MethodName == nameof(CommentBracket) || (comment as Method)?.MethodName == nameof(CommentBackSlash)))
+                if (_tokenIndex >= Tokens.Count)
                 {
-                    comment.Process(this);
+                    _tokenIndex = start - 1;
+                    throw new Exception($"Expecting {end}");
+                }
+
+                if ((Dict.At(Token.Text) as Method)?.IsComment == true)
+                {
+                    Dict.At(Token.Text).Process(this);
                 }
             }
 
+            return start;
+        }
+
+        string ReadBlock(int start)
+        {
+            var text = new StringBuilder();
+
             for (int i = start; i < _tokenIndex; i++)
             {
-                if (i > start && Tokens[i - 1].Y != Tokens[i].Y)
+                if (Tokens[i - 1].Y != Tokens[i].Y || Tokens[i - 1].File != Tokens[i].File)
                 {
                     text.AppendLine();
                 }
@@ -278,74 +282,72 @@ namespace ForthCompiler
             return text.ToString().Trim();
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void Macro()
         {
-            var macro = Dict.Entry(Token.Text.Dequote(), () => new MacroText(), true);
-
-            macro.Text = ParseBlock(nameof(EndMacro));
+            Dict.At(_arguments[0].Dequote(), () => new MacroText(), true).Text = ReadBlock(ParseBlock(nameof(EndMacro)));
         }
 
-        [Method(null)]
+        [Method]
         private void EndMacro()
         {
         }
 
-        [Method(null, Arguments = 2)]
+        [Method(Arguments = 2)]
         public void TestCase()
         {
-            var target = Token.Arguments[0].Text.Dequote();
-            var expectedresult = Token.Arguments[1].Text.Dequote();
-            var testcode = ParseBlock(nameof(EndTestCase));
+            var target = _arguments[0].Dequote();
+            var expectedresult = _arguments[1].Dequote();
+            var testcode = ReadBlock(ParseBlock(nameof(EndTestCase)));
             var count = Regex.Matches(expectedresult, "\\S+").Count;
 
-            TestCases.Entry(testcode, () => $"( Test Case {target} ) {testcode} ( = ) {expectedresult} ( ) {count}");
+            TestCases.At(testcode, () => $"( Test Case {target} ) {testcode} ( = ) {expectedresult} ( ) {count}", true);
         }
 
-        [Method(null, Arguments = 2)]
+        [Method]
         public void EndTestCase()
         {
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void Struct()
         {
-            _structureStack.Push(new Structure { Name = Token.Text.Dequote(), Value = _tokenIndex });
+            _structureStack.Push(new Structure { Name = _arguments[0].Dequote(), Value = _tokenIndex });
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void EndStruct()
         {
-            _structureStack.Pop(Token.Text.Dequote());
+            _structureStack.Pop(_arguments[0].Dequote());
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void Constant()
         {
-            var cpu = Evaluate(Tokens[_tokenIndex - 4]);
+            var cpu = Evaluate(LastToken);
 
             Token.TokenType = TokenType.Constant;
-            Dict.Entry(Token.Text, () => new ConstantEntry { Value = cpu.ForthStack.First() }, true);
+            Dict.At(_arguments[0], () => new ConstantEntry { Value = cpu.ForthStack.First() }, true);
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void Addr()
         {
-            var prefix = Token.Text.Split('.').First();
+            var prefix = _arguments[0].Split('.').First();
             var structure = _structureStack.First(s => s.Name.IsEqual(prefix));
-            var label = Labels.Entry(Token.Text + structure.Value, () => new Label { Patches = new List<int>() });
+            var label = Labels.At(_arguments[0] + structure.Value, () => new Label { Patches = new List<int>() });
 
             label.Patches?.Add(CodeSlots.Count);
 
             Encode(label.CodeSlot / 8);
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void Label()
         {
-            var prefix = Token.Text.Split('.').First();
+            var prefix = _arguments[0].Split('.').First();
             var structure = _structureStack.First(s => s.Name.IsEqual(prefix));
-            var label = Labels.Entry(Token.Text + structure.Value, () => new Label());
+            var label = Labels.At(_arguments[0] + structure.Value, () => new Label());
 
             while (CodeSlots.Count % 8 != 0)
             {
@@ -361,32 +363,32 @@ namespace ForthCompiler
             label.Patches = null;
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void Value()
         {
-            Macro($"variable {Token.Text} {Token.Text} !");
+            Macro($"variable {_arguments[0]} {_arguments[0]} !");
         }
 
-        [Method(null, Arguments = 1)]
+        [Method(Arguments = 1)]
         private void Variable()
         {
             Token.TokenType = TokenType.Variable;
-            Token.DictEntry = Dict.Entry(Token.Text, () => new VariableEntry { HeapAddress = _heapSize++ }, true);
+            Dict.At(_arguments[0], () => new VariableEntry { HeapAddress = _heapSize++ }, true);
         }
 
-        [Method(null)]
+        [Method]
         private void NotImplementedException()
         {
             throw new NotImplementedException();
         }
 
-        [Method("[")]
+        [Method(Name = "[")]
         private void CompilerEvalStart()
         {
             _structureStack.Push(new Structure { Name = nameof(CompilerEvalStart), Value = _tokenIndex });
         }
 
-        [Method("]")]
+        [Method(Name = "]")]
         private void CompilerEvalStop()
         {
             var start = Tokens[_structureStack.Pop(nameof(CompilerEvalStart)).Value];
@@ -395,62 +397,59 @@ namespace ForthCompiler
             cpu.ForthStack.Reverse().ToList().ForEach(v => Encode(v));
         }
 
-        [Method("(")]
+        [Method(Name = "(", IsComment = true)]
         private void CommentBracket()
         {
-            var start = Token;
-            for  (;Token.Text != ")"; ++_tokenIndex)
+            var pos = _tokenIndex++;
+
+            ParseBlock(")");
+
+            while (pos <= _tokenIndex)
             {
-                Token.TokenType = TokenType.Excluded;
-                Token.DictEntry = start.DictEntry;
+                Tokens[pos++].TokenType = TokenType.Excluded;
             }
-            Token.TokenType = TokenType.Excluded;
-            Token.DictEntry = start.DictEntry;
         }
 
-        [Method("\\")]
+        [Method(Name = "\\", IsComment = true)]
         private void CommentBackSlash()
         {
             var start = Token;
             for (; _tokenIndex < Tokens.Count && Tokens[_tokenIndex].File == start.File && Tokens[_tokenIndex].Y == start.Y; _tokenIndex++)
             {
                 Token.TokenType = TokenType.Excluded;
-                Token.DictEntry = start.DictEntry;
             }
 
             _tokenIndex--;
         }
 
-        [Method(":", Arguments = 1)]
+        [Method(Name = ":", Arguments = 1)]
         public void DefinitionStart()
         {
             Token.TokenType = TokenType.Definition;
-            Dict.Entry(Token.Text, () => new DefinitionEntry(), true);
+            Dict.At(_arguments[0], () => new DefinitionEntry(), true);
 
             Macro("Struct Definition " +
                  $"addr Definition.SKIP /jnz label Global.{Token.Text}.Label _take1_");
         }
 
-        [Method(";")]
+        [Method(Name = ";")]
         private void DefinitionEnd()
         {
             Macro("label Definition.EXIT _R1_ @ _drop1_ /jnz label Definition.SKIP " +
                   "EndStruct Definition");
         }
 
-        [Method(null, Arguments = 2)]
+        [Method(Arguments = 2)]
         public void Prerequisite()
         {
-            var prerequisite = PreComp.Entry(Token.Arguments[0].Text, () => new Prerequisite());
-
-            prerequisite.References.Add(Token.Arguments[1].Text);
+            PreComp.At(_arguments[0], () => new Prerequisite()).References.Add(_arguments[1]);
         }
 
         public void Prerequisite(string reference)
         {
             if (!Dict.ContainsKey($"included {reference}"))
             {
-                var macro = Dict.Entry<IDictEntry, MacroText>(reference, () => { throw new Exception($"{reference} is not defined"); });
+                var macro = Dict.At<IDictEntry, MacroText>(reference, () => { throw new Exception($"{reference} is not defined"); });
                 var count = Tokens.Count;
 
                 Dict.Add($"included {reference}", null);
@@ -466,18 +465,13 @@ namespace ForthCompiler
     {
         public string Name { get; set; }
 
-        public string MethodName { get; set; }
-
         public Action Action { get; set; }
 
         public DictType DictType { get; set; } = DictType.Dict;
 
         public int Arguments { get; set; }
 
-        public Method(string name)
-        {
-            Name = name;
-        }
+        public bool IsComment { get; set; }
 
         public void Process(Compiler compiler)
         {
@@ -512,22 +506,6 @@ namespace ForthCompiler
         {
             compiler.Token.TokenType = TokenType.Definition;
             compiler.Macro($"addr Global.{compiler.Token.Text}.Label /jsr label Global.Placeholder");
-        }
-    }
-
-    public class TestCase : IDictEntry
-    {
-        public void Process(Compiler compiler)
-        {
-        }
-
-        public TokenType TokenType => TokenType.Undetermined;
-        public string Text { get; }
-        public string For { get; }
-
-        public TestCase(string @for, string testcode, string expectedresult)
-        {
-            Text = $"( Test Case {@for} ) {testcode} ( = ) {expectedresult} ( ) {Regex.Matches(expectedresult, "\\S+").Count}";
         }
     }
 

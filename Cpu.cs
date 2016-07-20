@@ -8,7 +8,7 @@ namespace ForthCompiler
     public class Cpu
     {
         public int ProgramSlot { get; set; }
-        public SortedDictionary<int,int> Heap { get; } = new SortedDictionary<int, int>();
+        public SortedDictionary<int, int> Heap { get; } = new SortedDictionary<int, int>();
         public Dictionary<int, int> LastHeap { get; set; } = new Dictionary<int, int>();
         public Stack<int> Stack { get; } = new Stack<int>();
         public IEnumerable<int> ForthStack => new[] { _top, _next }.Concat(Stack).Take(Stack.Count);
@@ -18,9 +18,8 @@ namespace ForthCompiler
         private int _next;
         private bool _carry;
         private string _error;
-        public string[] LastState { get; private set; }
+        public object[] LastState { get; private set; }
         private readonly CodeSlot[] _codeslots;
-        public Func<int, string> Formatter { get; set; } = i => $"{i}";
         private Dictionary<int, string> _definitions;
 
         public Cpu(Compiler compiler)
@@ -31,23 +30,23 @@ namespace ForthCompiler
             CallStack.Push(new Structure { Name = "Global.Global.0" });
         }
 
-        public IEnumerable<string> ThisState => new[]
+        public IEnumerable<object> CurrState => new object[]
         {
-            $"PS={Formatter(ProgramSlot)} ",
-            $"SP={Formatter(Stack.Count)} ",
-            $"Top={Formatter(_top)} ",
-            $"Next={Formatter(_next)} ",
-            $"Carry={_carry} ",
-            $"{_error}",
+            "PS=",ProgramSlot,
+            " SP=",Stack.Count,
+            " Top=",_top,
+            " Next=",_next,
+            " Carry=",_carry,
+            " ",_error,
             Environment.NewLine,
             "Stack=",
-        }.Concat(ForthStack.Reverse().Select(i => $"{Formatter(i)} "));
+        }.Concat(ForthStack.Reverse().SelectMany(i => new object[] {i, " " }));
 
         void Step()
         {
             if (ProgramSlot < 0 || ProgramSlot >= _codeslots.Length)
             {
-                throw new Exception($"Outside executable code {Formatter(ProgramSlot)}");
+                throw new Exception("Outside executable code");
             }
 
             var code = _codeslots[ProgramSlot++];
@@ -58,7 +57,7 @@ namespace ForthCompiler
                 case Code._:
                     break;
                 case Code.Ldw:
-                    _top = Heap.Entry(_top);
+                    _top = Heap.At(_top);
                     break;
                 case Code.Stw:
                     Heap[_top] = _next;
@@ -138,7 +137,7 @@ namespace ForthCompiler
         public void Run(Func<int, bool> breakCondition)
         {
             _error = null;
-            LastState = ThisState.ToArray();
+            LastState = CurrState.ToArray();
             LastHeap = Heap.ToDictionary(h => h.Key, h => h.Value);
 
             for (int i = 0; i == 0 || !breakCondition(i); i++)
