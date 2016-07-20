@@ -10,17 +10,21 @@ namespace ForthCompiler
 
         public string AddressFormatted => Parent.Formatter(Address);
 
-        public string Value => Parent.Formatter(Parent.Cpu.Heap[Address]);
+        public string Value => Parent.Formatter(Parent.Cpu.Heap.Entry(Address));
 
-        public Brush Foreground => IsChanged ? Brushes.Red : Brushes.Black;
+        public Brush ValueForeground => IsChanged ? Brushes.Red : Brushes.Black;
 
-        public bool IsChanged => Parent.Cpu.Heap[Address] != Parent.Cpu.LastHeap[Address];
+        public Brush NameForeground => TokenColors[TokenType.Variable];
+
+        public bool IsChanged => Parent.Cpu.Heap.Entry(Address) != Parent.Cpu.LastHeap.Entry(Address);
+
+        public bool WasChanged { get; set; }
 
         public void Refresh()
         {
             OnPropertyChanged(nameof(Value));
             OnPropertyChanged(nameof(AddressFormatted));
-            OnPropertyChanged(nameof(Foreground));
+            OnPropertyChanged(nameof(ValueForeground));
         }
     }
 }

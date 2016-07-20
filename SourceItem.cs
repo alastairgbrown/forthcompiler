@@ -1,55 +1,14 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
-using System.Xml.Linq;
-using System.Xml.XPath;
-using static System.Windows.Media.ColorConverter;
 
 namespace ForthCompiler
 {
     public class SourceItem : UiItem, ISlotRange
     {
-        private static readonly Dictionary<TokenType, Brush> TokenColors = new Dictionary<TokenType, Brush>();
-        private static readonly Dictionary<string, Brush> KeywordColors = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
-
-        static SourceItem()
-        {
-            try
-            {
-                var xml = XDocument.Load("4th.xml");
-                var brushes = xml.XPathSelectElements("//WordsStyle").ToDictionary(
-                                    x => x.Attribute("name").Value,
-                                    x => new SolidColorBrush((Color)ConvertFromString("#" + x.Attribute("fgColor").Value)),
-                                    StringComparer.OrdinalIgnoreCase);
-
-                foreach (var keywordlist in xml.XPathSelectElements("//Keywords")
-                                               .Where(x => x.Attribute("name").Value.StartsWith("Keywords") ||
-                                                           x.Attribute("name").Value == "Operators1"))
-                {
-                    var name = keywordlist.Attribute("name").Value.Replace("Operators1", "Operators");
-
-                    foreach (Match keyword in Regex.Matches(keywordlist.Value, @"\S+"))
-                    {
-                        KeywordColors[keyword.Value] = brushes[name];
-                    }
-                }
-
-                TokenColors[TokenType.Excluded] = brushes["COMMENTS"];
-                TokenColors[TokenType.Literal] = brushes["NUMBERS"];
-                TokenColors[TokenType.Constant] = KeywordColors.Entry("CONSTANT_IDENTIFIER", () => Brushes.Magenta);
-                TokenColors[TokenType.Variable] = KeywordColors.Entry("VARIABLE_IDENTIFIER", () => Brushes.Magenta);
-                TokenColors[TokenType.Definition] = KeywordColors.Entry("DEFINITION_IDENTIFIER", () => Brushes.Magenta);
-                TokenColors[TokenType.Error] = KeywordColors.Entry("ERROR_IDENTIFIER", () => Brushes.Red);
-            }
-            catch (Exception)
-            {
-            }
-        }
 
         private int[] _originalCodeCounts;
 

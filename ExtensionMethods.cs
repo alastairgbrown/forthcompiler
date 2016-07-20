@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -12,7 +14,40 @@ namespace ForthCompiler
             return string.Compare(a, b, StringComparison.OrdinalIgnoreCase) == 0;
         }
 
-        public static T Entry<TD,T>(this Dictionary<string,TD> dict,  string key, Func<T> createFunc, bool exclusive = false) where T : TD
+        public static void Sort<T>(this ObservableCollection<T> collection, Comparison<T> comparison)
+        {
+            var sortableList = new List<T>(collection);
+            sortableList.Sort(comparison);
+
+            for (int i = 0; i < sortableList.Count; i++)
+            {
+                collection.Move(collection.IndexOf(sortableList[i]), i);
+            }
+        }
+
+        public static void AddRange(this IList collection, IEnumerable items)
+        {
+            foreach (var item in items)
+            {
+                collection.Add(item);
+            }
+        }
+
+        public static void RemoveRange(this IList collection, int index, int count)
+        {
+            for (int i = count - 1; i >= 0; i--)
+            {
+                collection.RemoveAt(index + i);
+            }
+        }
+
+        public static TV Entry<TK, TV>(this IDictionary<TK, TV> dict, TK key)
+        {
+            TV value;
+            return dict.TryGetValue(key, out value) ? value : default(TV);
+        }
+
+        public static T Entry<TD, T>(this Dictionary<string, TD> dict, string key, Func<T> createFunc, bool exclusive = false) where T : TD
         {
             TD entry;
 

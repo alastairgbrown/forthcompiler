@@ -8,8 +8,8 @@ namespace ForthCompiler
     public class Cpu
     {
         public int ProgramSlot { get; set; }
-        public int[] Heap { get; }
-        public int[] LastHeap { get; }
+        public SortedDictionary<int,int> Heap { get; } = new SortedDictionary<int, int>();
+        public Dictionary<int, int> LastHeap { get; set; } = new Dictionary<int, int>();
         public Stack<int> Stack { get; } = new Stack<int>();
         public IEnumerable<int> ForthStack => new[] { _top, _next }.Concat(Stack).Take(Stack.Count);
         public Stack<Structure> CallStack { get; } = new Stack<Structure>();
@@ -28,9 +28,7 @@ namespace ForthCompiler
             _codeslots = compiler.CodeSlots.ToArray();
             _definitions = compiler.Labels.Where(l => l.Key.StartsWith("Global."))
                                           .ToDictionary(l => l.Value.CodeSlot, l => l.Key);
-            Heap = new int[compiler.HeapSize];
-            LastHeap = new int[compiler.HeapSize];
-            CallStack.Push(new Structure { Name = "Global.Global.0", Value = int.MaxValue });
+            CallStack.Push(new Structure { Name = "Global.Global.0" });
         }
 
         public IEnumerable<string> ThisState => new[]
@@ -60,7 +58,7 @@ namespace ForthCompiler
                 case Code._:
                     break;
                 case Code.Ldw:
-                    _top = Heap[_top];
+                    _top = Heap.Entry(_top);
                     break;
                 case Code.Stw:
                     Heap[_top] = _next;
@@ -141,7 +139,7 @@ namespace ForthCompiler
         {
             _error = null;
             LastState = ThisState.ToArray();
-            Array.Copy(Heap, LastHeap, Heap.Length);
+            LastHeap = Heap.ToDictionary(h => h.Key, h => h.Value);
 
             for (int i = 0; i == 0 || !breakCondition(i); i++)
             {

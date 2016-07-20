@@ -6,7 +6,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
-using System.Windows.Threading;
 
 namespace ForthCompiler
 {
@@ -15,8 +14,6 @@ namespace ForthCompiler
     /// </summary>
     public partial class DebugWindow
     {
-        private readonly bool _test;
-
         public int MacroLevel { get; private set; }
         public Compiler Compiler { get; }
 
@@ -34,15 +31,7 @@ namespace ForthCompiler
         {
             InitializeComponent();
 
-            _test = test;
-
             Compiler = compiler;
-
-            for (int i = 0; i < Compiler.HeapSize; i++)
-            {
-                HeapItems.Add(new HeapItem { Address = i, Parent = this, Name = compiler.Dict.FirstOrDefault(t => (t.Value as VariableEntry)?.HeapAddress == i).Key });
-            }
-
             HeapListBox.ItemsSource = HeapItems;
             SourceListBox.ItemsSource = SourceItems;
             CallStackListBox.ItemsSource = CallStackItems;
@@ -65,9 +54,8 @@ namespace ForthCompiler
             {
                 var textBlock = new TextBlock();
 
-                textBlock.Inlines.Add(new Run { Text = Compiler.Error, Foreground = Brushes.Red });
-
-                CpuLabel.Content = textBlock;
+                Status.Inlines.Clear();
+                Status.Inlines.Add(new Run { Text = Compiler.Error, Foreground = Brushes.Red });
             }
             else if (test)
             {
@@ -75,40 +63,37 @@ namespace ForthCompiler
             }
         }
 
-        private void Refresh(Func<SourceItem, bool> refreshSource, Func<HeapItem, bool> refreshHeap)
+        private void Refresh(Func<SourceItem, bool> refreshSource = null, Func<HeapItem, bool> refreshHeap = null)
         {
-            var lastState = Cpu.LastState ?? Cpu.ThisState.ToArray();
-            var thisState = Cpu.ThisState.ToArray();
-            var textBlock = new TextBlock();
+            var last = Cpu.LastState ?? Cpu.ThisState.ToArray();
+            var curr = Cpu.ThisState.ToArray();
 
-            Array.Resize(ref lastState, Math.Max(lastState.Length, thisState.Length));
-            Array.Resize(ref thisState, Math.Max(lastState.Length, thisState.Length));
+            Array.Resize(ref last, Math.Max(last.Length, curr.Length));
+            Array.Resize(ref curr, Math.Max(last.Length, curr.Length));
 
-            for (var i = 0; i < thisState.Length; i++)
-            {
-                textBlock.Inlines.Add(new Run { Text = thisState[i] ?? "-", Foreground = thisState[i] == lastState[i] ? Brushes.Black : Brushes.Red });
-            }
+            Status.Inlines.Clear();
+            Status.Inlines.AddRange(Enumerable.Range(0, curr.Length).Select(
+                    i => new Run { Text = curr[i] ?? "-", Foreground = curr[i] == last[i] ? Brushes.Black : Brushes.Red }));
 
-            CpuLabel.Content = textBlock;
-
-            foreach (var item in SourceItems.Where(refreshSource))
+            foreach (var item in SourceItems.Where(si => refreshSource == null || refreshSource(si)))
             {
                 item.Refresh();
             }
 
-            foreach (var item in HeapItems.Where(refreshHeap))
+            var addresses = new HashSet<int>(HeapItems.Select(hi => hi.Address));
+            HeapItems.AddRange(Cpu.Heap.Keys.Where(a => !addresses.Contains(a)).Select(a => new HeapItem { Parent = this, Address = a }));
+            HeapItems.Sort((a, b) => a.Address.CompareTo(b.Address));
+
+            foreach (var item in HeapItems.Where(hi => hi.WasChanged || refreshHeap == null || refreshHeap(hi)))
             {
                 item.Refresh();
+                item.WasChanged = item.IsChanged;
             }
 
-            while (CallStackItems.Count < Cpu.CallStack.Count)
-            {
-                CallStackItems.Add(new CallStackItem { Parent = this });
-            }
-            while (CallStackItems.Count > Cpu.CallStack.Count)
-            {
-                CallStackItems.RemoveAt(0);
-            }
+            CallStackItems.AddRange(Enumerable.Range(0, Math.Max(0, Cpu.CallStack.Count - CallStackItems.Count))
+                                              .Select(i => new CallStackItem { Parent = this }));
+            CallStackItems.RemoveRange(0, Math.Max(0, CallStackItems.Count - Cpu.CallStack.Count));
+
             for (int i = 0; i < CallStackItems.Count; i++)
             {
                 CallStackItems[i].Item = Cpu.CallStack.ElementAt(i);
@@ -123,7 +108,7 @@ namespace ForthCompiler
 
         public string Formatter(int i)
         {
-            return ShowHex.IsChecked ? $"{i:X}" : $"{i}";
+            return ShowHex.IsChecked ? $"${i:X}" : $"{i}";
         }
 
         private void Run(Func<int, bool> breakCondition)
@@ -134,7 +119,7 @@ namespace ForthCompiler
             Cpu.Run(breakCondition);
 
             ProgramSlot = Cpu.ProgramSlot;
-            Refresh(si => si == start || si.Contains(ProgramSlot), hi => hi.IsChanged);
+            Refresh(si => si == start || si.Contains(ProgramSlot), hi => hi.IsChanged || hi.WasChanged);
         }
 
 
@@ -181,8 +166,14 @@ namespace ForthCompiler
         {
             Cpu = new Cpu(Compiler) { Formatter = Formatter };
 
+            HeapItems.Clear();
+            foreach (var variable in Compiler.Dict.Select(v => new { v.Key, Value = v.Value as VariableEntry }).Where(v => v.Value != null))
+            {
+                HeapItems.Add(new HeapItem { Parent = this, Name = variable.Key, Address = variable.Value.HeapAddress });
+            }
+
             SourceItems.ToList().ForEach(si => si.TestResult = null);
-            Refresh(si => true, hi => true);
+            Refresh();
         }
 
         private void RunTests_Click(object sender, RoutedEventArgs e)
@@ -214,13 +205,10 @@ namespace ForthCompiler
                 results[result]++;
             }
 
-            Refresh(si => true, hi => true);
+            Refresh();
 
-            var textBlock = new TextBlock();
-
-            textBlock.Inlines.Add(new Run { Text = $"Test result - {string.Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}" });
-
-            CpuLabel.Content = textBlock;
+            Status.Inlines.Clear();
+            Status.Inlines.Add(new Run { Text = $"Test result - {string.Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}" });
         }
 
         private void SetPc_Click(object sender, RoutedEventArgs e)
@@ -232,12 +220,12 @@ namespace ForthCompiler
                 Cpu.ProgramSlot = item.CodeSlot;
             }
 
-            Refresh(si => true, hi => true);
+            Refresh();
         }
 
         private void Show_Click(object sender, RoutedEventArgs e)
         {
-            Refresh(si => true, hi => true);
+            Refresh();
         }
 
         private void MacroLevel_Click(object sender, RoutedEventArgs e)
@@ -247,7 +235,7 @@ namespace ForthCompiler
             MacroLevel = menuItems.IndexOf((MenuItem)sender);
             menuItems.ForEach(mi => mi.IsChecked = ReferenceEquals(mi, sender));
 
-            Refresh(si => true, hi => true);
+            Refresh();
         }
 
         private void CallStackListBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -255,7 +243,7 @@ namespace ForthCompiler
             if (CallStackListBox.SelectedItem != null)
             {
                 ProgramSlot = ((CallStackItem)CallStackListBox.SelectedItem).Item.Value;
-                Refresh(si => Cpu.CallStack.Any(csi => si.Contains(csi.Value)), hi => hi.IsChanged);
+                Refresh(si => Cpu.CallStack.Any(csi => si.Contains(csi.Value)), hi => hi.IsChanged || hi.WasChanged);
             }
         }
     }

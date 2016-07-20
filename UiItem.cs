@@ -1,11 +1,56 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
+using System.Windows.Media;
+using System.Xml.Linq;
+using System.Xml.XPath;
 using ForthCompiler.Annotations;
+using static System.Windows.Media.ColorConverter;
 
 namespace ForthCompiler
 {
-    public class UiItem : INotifyPropertyChanged
+    public abstract class UiItem : INotifyPropertyChanged
     {
+        protected static readonly Dictionary<TokenType, Brush> TokenColors = new Dictionary<TokenType, Brush>();
+        protected static readonly Dictionary<string, Brush> KeywordColors = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
+
+        static UiItem()
+        {
+            try
+            {
+                var xml = XDocument.Load("4th.xml");
+                var brushes = xml.XPathSelectElements("//WordsStyle").ToDictionary(
+                        x => x.Attribute("name").Value,
+                        x => new SolidColorBrush((Color)(ConvertFromString("#" + x.Attribute("fgColor").Value) ?? Colors.Black)),
+                        StringComparer.OrdinalIgnoreCase);
+
+                foreach (var keywordlist in xml.XPathSelectElements("//Keywords")
+                                               .Where(x => x.Attribute("name").Value.StartsWith("Keywords") ||
+                                                           x.Attribute("name").Value == "Operators1"))
+                {
+                    var name = keywordlist.Attribute("name").Value.Replace("Operators1", "Operators");
+
+                    foreach (Match keyword in Regex.Matches(keywordlist.Value, @"\S+"))
+                    {
+                        KeywordColors[keyword.Value] = brushes[name];
+                    }
+                }
+
+                TokenColors[TokenType.Excluded] = brushes["COMMENTS"];
+                TokenColors[TokenType.Literal] = brushes["NUMBERS"];
+                TokenColors[TokenType.Constant] = KeywordColors.Entry("CONSTANT_IDENTIFIER", () => Brushes.Magenta);
+                TokenColors[TokenType.Variable] = KeywordColors.Entry("VARIABLE_IDENTIFIER", () => Brushes.Magenta);
+                TokenColors[TokenType.Definition] = KeywordColors.Entry("DEFINITION_IDENTIFIER", () => Brushes.Magenta);
+                TokenColors[TokenType.Error] = KeywordColors.Entry("ERROR_IDENTIFIER", () => Brushes.Red);
+            }
+            catch (Exception)
+            {
+                // ignored, it not the end of the world if we don't have colored text
+            }
+        }
         public DebugWindow Parent { get; set; }
 
         public event PropertyChangedEventHandler PropertyChanged;

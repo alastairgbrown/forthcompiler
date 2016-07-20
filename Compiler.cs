@@ -26,8 +26,7 @@ namespace ForthCompiler
         public Dictionary<string, Label> Labels { get; } = new Dictionary<string, Label>(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> TestCases { get; } = new Dictionary<string, string>();
 
-        public int HeapSize { get; private set; }
-
+        private int _heapSize;
         private int _tokenIndex;
         private int _prerequisiteIndex;
         private readonly Stack<Structure> _structureStack = new Stack<Structure>(new[] { new Structure { Name = "Global" } });
@@ -248,7 +247,7 @@ namespace ForthCompiler
         {
             var cpu = Evaluate(Tokens[_tokenIndex - 2]);
 
-            HeapSize += cpu.ForthStack.First();
+            _heapSize += cpu.ForthStack.First();
         }
 
         string ParseBlock(string end)
@@ -372,7 +371,7 @@ namespace ForthCompiler
         private void Variable()
         {
             Token.TokenType = TokenType.Variable;
-            Token.DictEntry = Dict.Entry(Token.Text, () => new VariableEntry { HeapAddress = HeapSize++ }, true);
+            Token.DictEntry = Dict.Entry(Token.Text, () => new VariableEntry { HeapAddress = _heapSize++ }, true);
         }
 
         [Method(null)]
