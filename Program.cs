@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using static System.StringComparer;
 
 /*
 valid opcodes (5 bit)
@@ -79,49 +81,76 @@ namespace ForthCompiler
         [STAThread]
         private static void Main(string[] args)
         {
-            try
+            var argMap = Enumerable.Range(0, args.Length)
+                             .Where(i => args[i].StartsWith("-"))
+                             .ToDictionary(i => args[i], i => i + 1 < args.Length ? args[i + 1] : null, OrdinalIgnoreCase);
+            var compiler = new Compiler();
+            var error = (string)null;
+
+            if (!argMap.Any())
             {
+                argMap["-testcases"] = argMap["-debug"] = null;
+            }
 
-                var argMap = Enumerable.Range(0, args.Length)
-                                 .Where(i => args[i].StartsWith("-"))
-                                 .ToDictionary(i => args[i], i => i + 1 < args.Length ? args[i + 1] : null, StringComparer.OrdinalIgnoreCase);
-                var testcases = argMap.ContainsKey("-testcases") || args.Length == 0;
-                var debug = argMap.ContainsKey("-debug") || args.Length == 0;
-                var compiler = new Compiler();
-
-                if (argMap.ContainsKey("-f"))
+            if (argMap.ContainsKey("-nocatch"))
+            {
+                Compile(compiler, argMap);
+            }
+            else
+            {
+                try
                 {
-                    compiler.ReadFile(0, argMap["-f"], y => y, x => x, File.ReadAllLines(argMap["-f"]));
+                    Compile(compiler, argMap);
                 }
-                else if (testcases)
+                catch (Exception ex)
                 {
-                    compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.TestCases.Values);
-                }
-
-                if (args.Length == 0)
-                {
-                    var name = Assembly.GetExecutingAssembly().GetName().Name;
-                    Console.WriteLine($"Usage:");
-                    Console.WriteLine($"   {name} [-f filename] [-mif mifFilename] [-debug] [-testcases]");
-                }
-
-                compiler.Parse();
-                compiler.CheckSequences();
-
-                if (argMap.ContainsKey("-mif"))
-                {
-                    File.WriteAllLines(argMap["-mif"], compiler.MakeMif());
-                    Console.WriteLine($"Generated: {argMap["-mif"]}");
-                }
-
-                if (debug)
-                {
-                    new DebugWindow(compiler, testcases).ShowDialog();
+                    var pos = compiler.ArgumentToken;
+                    var line = compiler.Sources[pos.File][pos.Y];
+                    error = $"Error:  {ex.Message}{Environment.NewLine}" +
+                            $"File:   {pos.File}({pos.Y + 1},{pos.X + 1}){Environment.NewLine}" +
+                            $"Line:   {line.Substring(0, pos.X)}<<>>{line.Substring(pos.X)}";
+                    Console.WriteLine(error);
+                    compiler.Tokens.SkipWhile(t => t != compiler.ArgumentToken).ToList().ForEach(t => t.TokenType = TokenType.Error);
+                    compiler.PostCompile();
                 }
             }
-            catch (NotSupportedException ex)
+
+            if (args.Length == 0)
             {
-                Console.WriteLine($"Exception: {ex.Message}");
+                var name = Assembly.GetExecutingAssembly().GetName().Name;
+                Console.WriteLine();
+                Console.WriteLine($"Usage:");
+                Console.WriteLine($"   {name} [-f filename | -testcases] [-mif mifFilename] [-debug]");
+            }
+
+            if (argMap.ContainsKey("-debug"))
+            {
+                new DebugWindow(compiler, argMap.ContainsKey("-testcases"), error).ShowDialog();
+            }
+        }
+
+        public static void Compile(Compiler compiler, Dictionary<string, string> argMap)
+        {
+            compiler.LoadCore();
+
+            if (argMap.ContainsKey("-f"))
+            {
+                compiler.ReadFile(0, argMap["-f"], y => y, x => x, File.ReadAllLines(argMap["-f"]));
+            }
+            else if (argMap.ContainsKey("-testcases"))
+            {
+                compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.TestCases.Values.ToArray());
+            }
+
+            compiler.Precompile();
+            compiler.Compile();
+            compiler.PostCompile();
+            compiler.CheckSequences();
+
+            if (argMap.ContainsKey("-mif"))
+            {
+                File.WriteAllLines(argMap["-mif"], compiler.MakeMif());
+                Console.WriteLine($"Generated: {argMap["-mif"]}");
             }
         }
     }

@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using ForthCompiler.Annotations;
+using static System.StringComparer;
 using static System.Windows.Media.ColorConverter;
 
 namespace ForthCompiler
@@ -15,25 +16,26 @@ namespace ForthCompiler
     public abstract class UiItem : INotifyPropertyChanged
     {
         protected static readonly Dictionary<TokenType, Brush> TokenColors = new Dictionary<TokenType, Brush>();
-        protected static readonly Dictionary<string, Brush> KeywordColors = new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase);
+        protected static readonly Dictionary<string, Brush> KeywordColors = new Dictionary<string, Brush>(OrdinalIgnoreCase);
 
-        static UiItem()
+        public UiItem()
         {
             try
             {
-                var xml = XDocument.Load("4th.xml");
+                var xml = XDocument.Parse("ForthColoring.xml".LoadFileOrResource());
                 var brushes = xml.XPathSelectElements("//WordsStyle").ToDictionary(
                         x => x.Attribute("name").Value,
                         x => new SolidColorBrush((Color)(ConvertFromString("#" + x.Attribute("fgColor").Value) ?? Colors.Black)),
-                        StringComparer.OrdinalIgnoreCase);
+                        OrdinalIgnoreCase);
+                var regex = new Regex(@"(?<a>Keywords\d)|(?<a>Operators)1|(?<a>Folder)s(?<b> in \w+)");
 
-                foreach (var keywordlist in xml.XPathSelectElements("//Keywords")
-                                               .Where(x => x.Attribute("name").Value.StartsWith("Keywords") ||
-                                                           x.Attribute("name").Value == "Operators1"))
+                foreach (var item in xml.XPathSelectElements("//Keywords")
+                                        .Select(x => new { regex.Match(x.Attribute("name").Value).Groups, x.Value })
+                                        .Where(x => x.Groups["a"].Success))
                 {
-                    var name = keywordlist.Attribute("name").Value.Replace("Operators1", "Operators");
+                    var name = $"{item.Groups["a"]}{item.Groups["b"]}";
 
-                    foreach (Match keyword in Regex.Matches(keywordlist.Value, @"\S+"))
+                    foreach (Match keyword in Regex.Matches(item.Value, @"\S+"))
                     {
                         KeywordColors[keyword.Value] = brushes.At(name) ?? Brushes.Black;
                     }
@@ -46,9 +48,9 @@ namespace ForthCompiler
                 TokenColors[TokenType.Definition] = KeywordColors.At("DEFINITION_IDENTIFIER") ?? Brushes.Magenta;
                 TokenColors[TokenType.Error] = KeywordColors.At("ERROR_IDENTIFIER") ?? Brushes.Red;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // ignored, it not the end of the world if we don't have colored text
+                // ignored, it's not the end of the world if we don't have colored text
             }
         }
         public DebugWindow Parent { get; set; }

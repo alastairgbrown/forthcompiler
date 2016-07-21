@@ -5,7 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ForthCompiler"
         mc:Ignorable="d"
-        Title="MainWindow" Height="342.279" Width="766.912"  Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}" >
+        Title="4th Debbugger" Height="342.279" Width="766.912"  
+        Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}">
     <Window.Resources>
         <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceItem}">
             <StackPanel Orientation="Horizontal" Background="{Binding Background}" ToolTip="{Binding Tooltip}">

@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using static System.StringComparer;
 
 namespace ForthCompiler
 {
@@ -16,16 +17,17 @@ namespace ForthCompiler
         public List<Token> Tokens { get; } = new List<Token>();
 
         public Token Token => _tokenIndex < Tokens.Count ? Tokens[_tokenIndex] : null;
-        public Token LastToken { get; set; }
+        public Token ArgumentToken { get; set; }
+        private Token _lastToken;
 
         public List<CodeSlot> CodeSlots { get; } = new List<CodeSlot>();
 
-        public string Error { get; private set; }
-
-        public Dictionary<string, IDictEntry> Dict { get; } = new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase);
-        private Dictionary<string, IDictEntry> PreComp { get; } = new Dictionary<string, IDictEntry>(StringComparer.OrdinalIgnoreCase);
-        public Dictionary<string, Label> Labels { get; } = new Dictionary<string, Label>(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, IDictEntry> Dict { get; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
+        private Dictionary<string, IDictEntry> PreComp { get; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
+        public Dictionary<string, Label> Labels { get; } = new Dictionary<string, Label>(OrdinalIgnoreCase);
         public Dictionary<string, string> TestCases { get; } = new Dictionary<string, string>();
+
+        public Dictionary<string, string[]> Sources { get; } = new Dictionary<string, string[]>(OrdinalIgnoreCase);
 
         private int _heapSize;
         private int _tokenIndex;
@@ -33,7 +35,7 @@ namespace ForthCompiler
         private readonly Stack<Structure> _structureStack = new Stack<Structure>(new[] { new Structure { Name = "Global" } });
         private readonly List<string> _arguments = new List<string>();
 
-        public Compiler()
+        public void LoadCore()
         {
             var entries = new Dictionary<DictType, Dictionary<string, IDictEntry>> { { DictType.PreComp, PreComp }, { DictType.Dict, Dict } };
 
@@ -52,8 +54,8 @@ namespace ForthCompiler
                 entries[attribute.DictType].Add(attribute.Name, attribute);
             }
 
-            ReadFile(0, "core.4th", y => y, x => x, File.ReadAllLines("core.4th"));
-            Parse();
+            ReadFile(0, "core.4th", y => y, x => x, "Core.4th".LoadFileOrResource().SplitLines());
+            Compile();
             _tokenIndex = _prerequisiteIndex = 0;
             CodeSlots.Clear();
             Tokens.Clear();
@@ -87,56 +89,54 @@ namespace ForthCompiler
             yield return "END";
         }
 
-        public void ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, IEnumerable<string> input, int macroLevel = 0)
+        public void ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, string[] input, int macroLevel = 0)
         {
+            Sources.At(file, () => input);
             Tokens.InsertRange(pos, input.SelectMany(
                 (s, i) => Regex.Matches(s, @"""([^""]|"""")*""|\S+|\s+")
                                .OfType<Match>()
                                .Select(m => new Token(m.Value, file, y(i), x(m.Index), macroLevel))));
         }
 
-        public void Parse()
+        public void Precompile()
         {
-            try
+            for (_tokenIndex = 0; _tokenIndex < Tokens.Count; _tokenIndex++)
             {
-                for (_tokenIndex = 0; _tokenIndex < Tokens.Count; _tokenIndex++)
+                if (PreComp.ContainsKey(Token.Text))
                 {
-                    if (PreComp.ContainsKey(Token.Text))
-                    {
-                        ParseSymbol(PreComp);
-                    }
-                }
-
-                for (_tokenIndex = 0; _tokenIndex < Tokens.Count; _tokenIndex++)
-                {
-                    Token.CodeSlot = CodeSlots.Count;
-
-                    if (Token.TokenType == TokenType.Literal)
-                    {
-                        Encode(Convert.ToInt32(Token.Text.Trim('$', '#', '%'),
-                                               Token.Text.StartsWith("$") ? 16 :
-                                               Token.Text.StartsWith("%") ? 2 : 10));
-                        LastToken = Token;
-                    }
-                    else if (Token.TokenType != TokenType.Excluded)
-                    {
-                        ParseSymbol(Dict);
-                        LastToken = Token;
-                    }
-                }
-
-                foreach (var label in Labels.Where(t => t.Value.Patches != null))
-                {
-                    throw new Exception("Unpatched label " + label.Key);
+                    ParseSymbol(PreComp);
                 }
             }
-            catch (Exception ex)
+        }
+
+        public void Compile()
+        {
+            for (_tokenIndex = 0; _tokenIndex < Tokens.Count; _tokenIndex++)
             {
-                Error = $"Error: {ex.Message}{Environment.NewLine}File: {Token})";
-                Console.WriteLine(Error);
-                Tokens.Skip(_tokenIndex).ToList().ForEach(t => t.TokenType = TokenType.Error);
+                Token.CodeSlot = CodeSlots.Count;
+
+                if (Token.TokenType == TokenType.Literal)
+                {
+                    Encode(Convert.ToInt32(Token.Text.Trim('$', '#', '%'),
+                                           Token.Text.StartsWith("$") ? 16 :
+                                           Token.Text.StartsWith("%") ? 2 : 10));
+                    _lastToken = Token;
+                }
+                else if (Token.TokenType != TokenType.Excluded)
+                {
+                    ParseSymbol(Dict);
+                    _lastToken = Token;
+                }
             }
 
+            foreach (var label in Labels.Where(t => t.Value.Patches != null))
+            {
+                throw new Exception("Unpatched label " + label.Key);
+            }
+        }
+
+        public void PostCompile()
+        {
             while (CodeSlots.Count % 8 != 0)
             {
                 Encode(Code._);
@@ -175,15 +175,17 @@ namespace ForthCompiler
 
         private void ParseSymbol(Dictionary<string, IDictEntry> dict)
         {
-            var dictEntry = dict.At(Token.Text);
+            _arguments.Clear();
+            ArgumentToken = Token;
+            ArgumentToken.CodeSlot = CodeSlots.Count;
+
+            var dictEntry = dict.At(ArgumentToken.Text);
 
             if (dictEntry == null)
             {
-                throw new Exception("Undefined symbol - " + Token.Text);
+                throw new Exception("Undefined symbol - " + ArgumentToken.Text);
             }
 
-            _arguments.Clear();
-            Token.CodeSlot = CodeSlots.Count;
             for (int i = 0; i < (dictEntry as Method)?.Arguments; i++)
             {
                 for (_tokenIndex++; Tokens[_tokenIndex].TokenType == TokenType.Excluded; _tokenIndex++)
@@ -195,6 +197,19 @@ namespace ForthCompiler
             }
 
             dictEntry.Process(this);
+        }
+
+
+        private Cpu Evaluate(Token start, int required)
+        {
+            var cpu = Evaluate(start);
+
+            if (cpu.ForthStack.Count() != required)
+            {
+                throw new Exception($"{ArgumentToken.Text} expects {required} preceding value(s)");
+            }
+
+            return cpu;
         }
 
         private Cpu Evaluate(Token start)
@@ -240,7 +255,7 @@ namespace ForthCompiler
         [Method]
         private void Allot()
         {
-            var cpu = Evaluate(LastToken);
+            var cpu = Evaluate(_lastToken, 1);
 
             _heapSize += cpu.ForthStack.First();
         }
@@ -324,7 +339,7 @@ namespace ForthCompiler
         [Method(Arguments = 1)]
         private void Constant()
         {
-            var cpu = Evaluate(LastToken);
+            var cpu = Evaluate(_lastToken, 1);
 
             Token.TokenType = TokenType.Constant;
             Dict.At(_arguments[0], () => new ConstantEntry { Value = cpu.ForthStack.First() }, true);
@@ -442,7 +457,7 @@ namespace ForthCompiler
         [Method(Arguments = 2)]
         public void Prerequisite()
         {
-            PreComp.At(_arguments[0], () => new Prerequisite()).References.Add(_arguments[1]);
+            PreComp.At(_arguments[0].Dequote(), () => new Prerequisite()).References.Add(_arguments[1]);
         }
 
         public void Prerequisite(string reference)
@@ -453,7 +468,7 @@ namespace ForthCompiler
                 var count = Tokens.Count;
 
                 Dict.Add($"included {reference}", null);
-                ReadFile(_prerequisiteIndex, reference, y => y, x => x, macro.Text.Split(new[] { "\r\n", "\r", "\n" }, 0));
+                ReadFile(_prerequisiteIndex, reference, y => y, x => x, macro.Text.SplitLines());
 
                 _prerequisiteIndex += Tokens.Count - count;
                 _tokenIndex += Tokens.Count - count;

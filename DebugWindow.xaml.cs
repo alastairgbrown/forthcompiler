@@ -1,11 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Drawing;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
-using System.Windows.Media;
+using System.Windows.Interop;
+using System.Windows.Media.Imaging;
+using Brushes = System.Windows.Media.Brushes;
 
 namespace ForthCompiler
 {
@@ -27,10 +30,15 @@ namespace ForthCompiler
         private ObservableCollection<CallStackItem> CallStackItems { get; } = new ObservableCollection<CallStackItem>();
 
 
-        public DebugWindow(Compiler compiler, bool test)
+        public DebugWindow(Compiler compiler, bool test, string error)
         {
             InitializeComponent();
 
+            Icon = Imaging.CreateBitmapSourceFromHBitmap(
+                        Resource.ForthIcon.ToBitmap().GetHbitmap(), 
+                        IntPtr.Zero, 
+                        Int32Rect.Empty, 
+                        BitmapSizeOptions.FromEmptyOptions());
             Compiler = compiler;
             HeapListBox.ItemsSource = HeapItems;
             SourceListBox.ItemsSource = SourceItems;
@@ -48,18 +56,21 @@ namespace ForthCompiler
                 SourceItems.Last().Tokens.Add(token);
             }
 
-            Restart_Click(null, null);
-
-            if (compiler.Error != null)
+            if (error != null)
             {
-                var textBlock = new TextBlock();
-
+                Cpu = new Cpu(Compiler);
+                ProgramSlot = (Compiler.ArgumentToken?.CodeSlot ?? 1) - 1;
+                Refresh();
                 Status.Inlines.Clear();
-                Status.Inlines.Add(new Run { Text = Compiler.Error, Foreground = Brushes.Red });
+                Status.Inlines.Add(new Run { Text = error, Foreground = Brushes.Red });
             }
             else if (test)
             {
                 RunTests_Click(null, null);
+            }
+            else
+            {
+                Restart_Click(null, null);
             }
         }
 
@@ -169,6 +180,7 @@ namespace ForthCompiler
         private void Restart_Click(object sender, RoutedEventArgs e)
         {
             Cpu = new Cpu(Compiler);
+            ProgramSlot = 0;
 
             HeapItems.Clear();
             foreach (var variable in Compiler.Dict.Select(v => new { v.Key, Value = v.Value as VariableEntry }).Where(v => v.Value != null))

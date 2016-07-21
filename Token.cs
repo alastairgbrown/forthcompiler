@@ -24,7 +24,7 @@ namespace ForthCompiler
         public int X { get; }
         public string Text { get; set; }
         public TokenType TokenType { get; set; }
-        public int CodeSlot { get; set; } = -1;
+        public int CodeSlot { get; set; }
         public int CodeCount { get; set; }
 
         public override string ToString()

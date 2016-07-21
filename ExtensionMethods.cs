@@ -2,8 +2,11 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
+using ForthCompiler.Annotations;
 
 namespace ForthCompiler
 {
@@ -84,6 +87,46 @@ namespace ForthCompiler
         public static string Dequote(this string text)
         {
             return text.Trim('"');
+        }
+
+        public static string LoadFileOrResource([NotNull]this string name)
+        {
+            if (false && File.Exists(name))
+            {
+                return File.ReadAllText(name);
+            }
+
+            var data = Resource.ResourceManager.GetObject(Path.GetFileNameWithoutExtension(name));
+            var stringData = data as string;
+            var byteData = data as byte[];
+
+            if (stringData != null)
+            {
+                return stringData;
+            }
+
+            if (byteData != null)
+            {
+                foreach (var enc in new[] {Encoding.UTF8})
+                {
+                    var preamble = enc.GetPreamble();
+
+                    if (byteData.Length >= preamble.Length &&
+                        Enumerable.Range(0, preamble.Length).All(i => byteData[i] == preamble[i]))
+                    {
+                        return enc.GetString(byteData, preamble.Length, byteData.Length - preamble.Length);
+                    }
+                }
+
+                return Encoding.ASCII.GetString(byteData);
+            }
+
+            throw new Exception($"Can't load {name} resource");
+        }
+
+        public static string[] SplitLines([NotNull] this string text)
+        {
+            return text.Split(new[] {"\r\n", "\r", "\n"}, 0);
         }
     }
 }

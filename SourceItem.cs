@@ -87,7 +87,7 @@ namespace ForthCompiler
 
         public Visibility ShowAddress => Parent.ShowAddress.IsChecked ? Visibility.Visible : Visibility.Collapsed;
 
-        public Brush Background => this.Contains(Parent.Cpu.ProgramSlot)
+        public Brush Background => this.Contains(Parent.ProgramSlot)
                                         ? Brushes.Yellow
                                         : TestResult == null
                                             ? Brushes.Transparent
