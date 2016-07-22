@@ -19,12 +19,12 @@ namespace ForthCompiler
         public Token Token => _tokenIndex < Tokens.Count ? Tokens[_tokenIndex] : null;
         public Token ArgumentToken { get; set; }
         private Token _lastToken;
+        private List<CodeSlot> _compilation = new List<CodeSlot>();
 
-        public List<CodeSlot> CodeSlots { get; } = new List<CodeSlot>();
+        public List<CodeSlot> CodeSlots { get; set; }
 
         public Dictionary<string, IDictEntry> Dict { get; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
         private Dictionary<string, IDictEntry> PreComp { get; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
-        public Dictionary<string, Label> Labels { get; } = new Dictionary<string, Label>(OrdinalIgnoreCase);
         public Dictionary<string, string> TestCases { get; } = new Dictionary<string, string>();
 
         public Dictionary<string, string[]> Sources { get; } = new Dictionary<string, string[]>(OrdinalIgnoreCase);
@@ -37,7 +37,7 @@ namespace ForthCompiler
 
         public void LoadCore()
         {
-            var entries = new Dictionary<DictType, Dictionary<string, IDictEntry>> { { DictType.PreComp, PreComp }, { DictType.Dict, Dict } };
+            var entries = new Dictionary<bool, Dictionary<string, IDictEntry>> { { true, PreComp }, { false, Dict } };
 
             foreach (Code code in Enum.GetValues(typeof(Code)))
             {
@@ -51,13 +51,18 @@ namespace ForthCompiler
 
                 attribute.Name = attribute.Name ?? method.Name;
                 attribute.Action = (Action)Delegate.CreateDelegate(typeof(Action), this, method);
-                entries[attribute.DictType].Add(attribute.Name, attribute);
+                entries[attribute.IsPrecompile].Add(attribute.Name, attribute);
+
+                if (attribute.IsComment)
+                {
+                    entries[true].Add(attribute.Name, attribute);
+                }
             }
 
             ReadFile(0, "core.4th", y => y, x => x, "Core.4th".LoadFileOrResource().SplitLines());
             Compile();
             _tokenIndex = _prerequisiteIndex = 0;
-            CodeSlots.Clear();
+            _compilation.Clear();
             Tokens.Clear();
         }
 
@@ -113,13 +118,13 @@ namespace ForthCompiler
         {
             for (_tokenIndex = 0; _tokenIndex < Tokens.Count; _tokenIndex++)
             {
-                Token.CodeSlot = CodeSlots.Count;
-
                 if (Token.TokenType == TokenType.Literal)
                 {
+                    ArgumentToken = Token;
                     Encode(Convert.ToInt32(Token.Text.Trim('$', '#', '%'),
-                                           Token.Text.StartsWith("$") ? 16 :
-                                           Token.Text.StartsWith("%") ? 2 : 10));
+                        Token.Text.StartsWith("$")
+                            ? 16
+                            : Token.Text.StartsWith("%") ? 2 : 10));
                     _lastToken = Token;
                 }
                 else if (Token.TokenType != TokenType.Excluded)
@@ -128,28 +133,65 @@ namespace ForthCompiler
                     _lastToken = Token;
                 }
             }
-
-            foreach (var label in Labels.Where(t => t.Value.Patches != null))
-            {
-                throw new Exception("Unpatched label " + label.Key);
-            }
         }
 
         public void PostCompile()
         {
-            while (CodeSlots.Count % 8 != 0)
+            var labels = _compilation.Where(cs => cs.Code == Code.Label)
+                                  .GroupBy(cs => cs.Label)
+                                  .ToDictionary(cs => cs.Key, cs => cs.First(), OrdinalIgnoreCase);
+            int i, index = 0, lits = 0;
+
+            CodeSlots = new List<CodeSlot>();
+            foreach (var codeslot in _compilation)
             {
-                Encode(Code._);
+                if (codeslot.Code == Code.Lit || codeslot.Code == Code.Address)
+                {
+                    lits += 8;
+                }
+
+                if (codeslot.Code != Code.Label)
+                {
+                    codeslot.CodeIndex = CodeSlots.Count;
+                    CodeSlots.Add(codeslot);
+                }
+
+                if (codeslot.Code == Code.Label || codeslot == _compilation.Last())
+                {
+                    CodeSlots.AddRange(Enumerable.Range(0, 8 - CodeSlots.Count % 8).Select(e => (CodeSlot)Code._));
+                }
+
+                if (CodeSlots.Count % 8 == 0)
+                {
+                    CodeSlots.AddRange(Enumerable.Range(0, lits).Select(e => (CodeSlot)null));
+                    lits = 0;
+                }
+
+                if (codeslot.Code == Code.Label)
+                {
+                    codeslot.CodeIndex = CodeSlots.Count;
+                }
             }
 
-            for (int i = 0, slot = 0; i < Tokens.Count; i++)
+            foreach (var address in _compilation.Where(cs => cs.Code == Code.Address))
             {
-                Tokens[i].CodeSlot = slot = Math.Max(Tokens[i].CodeSlot, slot);
+                CodeSlots[address.CodeIndex] = labels[address.Label].CodeIndex / 8;
             }
 
-            for (int i = Tokens.Count - 1, slot = CodeSlots.Count; i >= 0; slot = Tokens[i--].CodeSlot)
+            foreach (var label in labels.Where(l => CodeSlots[l.Value.CodeIndex] != null))
             {
-                Tokens[i].CodeCount = slot - Tokens[i].CodeSlot;
+                CodeSlots[label.Value.CodeIndex].Label = label.Key;
+            }
+
+
+            for (i = Tokens.Count - 1, index = CodeSlots.Count; i >= 0; i--)
+            {
+                Tokens[i].CodeIndex = index = Tokens[i].CodeSlot?.CodeIndex ?? index;
+            }
+
+            for (i = Tokens.Count - 1, index = CodeSlots.Count; i >= 0; index = Tokens[i--].CodeIndex)
+            {
+                Tokens[i].CodeCount = index - Tokens[i].CodeIndex;
             }
         }
 
@@ -177,14 +219,8 @@ namespace ForthCompiler
         {
             _arguments.Clear();
             ArgumentToken = Token;
-            ArgumentToken.CodeSlot = CodeSlots.Count;
 
-            var dictEntry = dict.At(ArgumentToken.Text);
-
-            if (dictEntry == null)
-            {
-                throw new Exception("Undefined symbol - " + ArgumentToken.Text);
-            }
+            var dictEntry = dict.At(ArgumentToken.Text).Validate(null, $"{ArgumentToken.Text} is undefined");
 
             for (int i = 0; i < (dictEntry as Method)?.Arguments; i++)
             {
@@ -193,32 +229,32 @@ namespace ForthCompiler
                 }
 
                 _arguments.Add(Token.Text);
-                Token.CodeSlot = CodeSlots.Count;
             }
 
             dictEntry.Process(this);
         }
 
-
-        private Cpu Evaluate(Token start, int required)
-        {
-            var cpu = Evaluate(start);
-
-            if (cpu.ForthStack.Count() != required)
-            {
-                throw new Exception($"{ArgumentToken.Text} expects {required} preceding value(s)");
-            }
-
-            return cpu;
-        }
-
         private Cpu Evaluate(Token start)
         {
-            var cpu = new Cpu(this) { ProgramSlot = start.CodeSlot };
+            start = Tokens.SkipWhile(t => t != start).FirstOrDefault(t => t.CodeSlot != null).Validate(null, "Missing code to evaluate");
+
+            var slot = _compilation.IndexOf(start.CodeSlot);
+
+            if (_compilation.Skip(slot).Any(cs => cs.Code == Code.Label))
+            {
+                PostCompile();
+            }
+            else
+            {
+                CodeSlots = _compilation;
+            }
+
+            var cpu = new Cpu(this) { ProgramSlot = CodeSlots.IndexOf(start.CodeSlot) };
 
             cpu.Run(i => cpu.ProgramSlot >= CodeSlots.Count);
-            CodeSlots.RemoveRange(start.CodeSlot, CodeSlots.Count - start.CodeSlot);
-            Tokens.SkipWhile(t => t != start).ToList().ForEach(t => t.CodeSlot = CodeSlots.Count);
+            _compilation.RemoveRange(slot, _compilation.Count - slot);
+            Tokens.SkipWhile(t => t != start).ToList().ForEach(t => t.CodeSlot = null);
+            CodeSlots = null;
 
             return cpu;
         }
@@ -230,16 +266,11 @@ namespace ForthCompiler
 
         public void Encode(CodeSlot code)
         {
-            CodeSlots.Add(code);
-
-            if (CodeSlots.Count % 8 == 0)
-            {
-                var blanks = CodeSlots.Skip(CodeSlots.Count - 8).Count(cs => cs.Code == Code.Lit) * 8;
-                CodeSlots.AddRange(Enumerable.Range(0, blanks).Select(i => (CodeSlot)null));
-            }
+            ArgumentToken.CodeSlot = code;
+            _compilation.Add(code);
         }
 
-        [Method(Name = nameof(Include), Arguments = 1, DictType = DictType.PreComp)]
+        [Method(Name = nameof(Include), Arguments = 1, IsPrecompile = true)]
         private void IncludePrecompile()
         {
             var filename = _arguments[0].Dequote();
@@ -247,7 +278,7 @@ namespace ForthCompiler
             ReadFile(_tokenIndex + 1, filename, y => y, x => x, File.ReadAllLines(filename));
         }
 
-        [Method(Arguments = 1, DictType = DictType.Dict)]
+        [Method(Arguments = 1, IsPrecompile = false)]
         private void Include()
         {
         }
@@ -255,7 +286,7 @@ namespace ForthCompiler
         [Method]
         private void Allot()
         {
-            var cpu = Evaluate(_lastToken, 1);
+            var cpu = Evaluate(_lastToken).Validate(x => x.ForthStack.Count() == 1, "ALLOT expects 1 preceding value(s)");
 
             _heapSize += cpu.ForthStack.First();
         }
@@ -339,7 +370,7 @@ namespace ForthCompiler
         [Method(Arguments = 1)]
         private void Constant()
         {
-            var cpu = Evaluate(_lastToken, 1);
+            var cpu = Evaluate(_lastToken).Validate(x => x.ForthStack.Count() == 1, "CONSTANT expects 1 preceding value(s)");
 
             Token.TokenType = TokenType.Constant;
             Dict.At(_arguments[0], () => new ConstantEntry { Value = cpu.ForthStack.First() }, true);
@@ -350,11 +381,8 @@ namespace ForthCompiler
         {
             var prefix = _arguments[0].Split('.').First();
             var structure = _structureStack.First(s => s.Name.IsEqual(prefix));
-            var label = Labels.At(_arguments[0] + structure.Value, () => new Label { Patches = new List<int>() });
 
-            label.Patches?.Add(CodeSlots.Count);
-
-            Encode(label.CodeSlot / 8);
+            Encode(new CodeSlot { Code = Code.Address, Label = _arguments[0] + structure.Value });
         }
 
         [Method(Arguments = 1)]
@@ -362,20 +390,8 @@ namespace ForthCompiler
         {
             var prefix = _arguments[0].Split('.').First();
             var structure = _structureStack.First(s => s.Name.IsEqual(prefix));
-            var label = Labels.At(_arguments[0] + structure.Value, () => new Label());
 
-            while (CodeSlots.Count % 8 != 0)
-            {
-                Encode(Code._);
-            }
-
-            foreach (var patch in label.Patches ?? Enumerable.Empty<int>())
-            {
-                CodeSlots[patch].Value = CodeSlots.Count / 8;
-            }
-
-            label.CodeSlot = CodeSlots.Count;
-            label.Patches = null;
+            Encode(new CodeSlot { Code = Code.Label, Label = _arguments[0] + structure.Value });
         }
 
         [Method(Arguments = 1)]
@@ -464,7 +480,7 @@ namespace ForthCompiler
         {
             if (!Dict.ContainsKey($"included {reference}"))
             {
-                var macro = Dict.At<IDictEntry, MacroText>(reference, () => { throw new Exception($"{reference} is not defined"); });
+                var macro = (Dict.At(reference) as MacroText).Validate(null, $"{reference} is not defined");
                 var count = Tokens.Count;
 
                 Dict.Add($"included {reference}", null);
@@ -482,11 +498,11 @@ namespace ForthCompiler
 
         public Action Action { get; set; }
 
-        public DictType DictType { get; set; } = DictType.Dict;
-
         public int Arguments { get; set; }
 
         public bool IsComment { get; set; }
+
+        public bool IsPrecompile { get; set; }
 
         public void Process(Compiler compiler)
         {
@@ -542,36 +558,9 @@ namespace ForthCompiler
         }
     }
 
-    public class CodeSlot
-    {
-        public Code Code { get; set; }
-        public int Value { get; set; }
-
-        public static implicit operator CodeSlot(Code code)
-        {
-            return new CodeSlot { Code = code };
-        }
-
-        public static implicit operator CodeSlot(int value)
-        {
-            return new CodeSlot { Code = Code.Lit, Value = value };
-        }
-
-        public override string ToString()
-        {
-            return $"{Code}{(Code == Code.Lit ? " " + Value : "")}";
-        }
-    }
-
     public class Structure
     {
         public string Name { get; set; }
         public int Value { get; set; }
-    }
-
-    public enum DictType
-    {
-        PreComp,
-        Dict,
     }
 }

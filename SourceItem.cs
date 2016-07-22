@@ -57,10 +57,10 @@ namespace ForthCompiler
                         Text = token.Text,
                         Foreground = TokenColors.At(token.TokenType) ?? KeywordColors.At(token.Text) ?? Brushes.Black,
                         Background = current ? Brushes.LightGray : Brushes.Transparent,
-                        ToolTip = Parent.Formatter(token.CodeSlot)
+                        ToolTip = Parent.Formatter(token.CodeIndex) + " " + token.CodeCount
                     });
 
-                    for (var i = token.CodeSlot; Parent.ShowAsm.IsChecked && i < token.CodeSlot + token.CodeCount; i++)
+                    for (var i = token.CodeIndex; Parent.ShowAsm.IsChecked && i < token.CodeIndex + token.CodeCount; i++)
                     {
                         var codeslot = Parent.Compiler.CodeSlots[i];
 
@@ -83,7 +83,7 @@ namespace ForthCompiler
             }
         }
 
-        public string Address => Parent.Formatter(Tokens.First().CodeSlot);
+        public string Address => Parent.Formatter(Tokens.First().CodeIndex);
 
         public Visibility ShowAddress => Parent.ShowAddress.IsChecked ? Visibility.Visible : Visibility.Collapsed;
 
@@ -111,7 +111,7 @@ namespace ForthCompiler
 
         public Compiler Compiler => Parent.Compiler;
         public List<Token> Tokens { get; } = new List<Token>();
-        public int CodeSlot => Tokens.First().CodeSlot;
-        public int CodeCount => Tokens.Last().CodeSlot - Tokens.First().CodeSlot + Tokens.Last().CodeCount;
+        public int CodeIndex => Tokens.First().CodeIndex;
+        public int CodeCount => Tokens.Last().CodeIndex - Tokens.First().CodeIndex + Tokens.Last().CodeCount;
     }
 }

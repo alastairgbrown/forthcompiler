@@ -59,7 +59,7 @@ namespace ForthCompiler
             if (error != null)
             {
                 Cpu = new Cpu(Compiler);
-                ProgramSlot = (Compiler.ArgumentToken?.CodeSlot ?? 1) - 1;
+                ProgramSlot = (Compiler.ArgumentToken?.CodeIndex ?? 1) - 1;
                 Refresh();
                 Status.Inlines.Clear();
                 Status.Inlines.Add(new Run { Text = error, Foreground = Brushes.Red });
@@ -130,7 +130,7 @@ namespace ForthCompiler
         {
             var start = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramSlot));
 
-            _breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeSlot));
+            _breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeIndex));
             Cpu.Run(breakCondition);
 
             ProgramSlot = Cpu.ProgramSlot;
@@ -199,8 +199,8 @@ namespace ForthCompiler
 
             foreach (var test in tests.Where(t => t.IsTestCase))
             {
-                Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeSlot };
-                Cpu.Run(i => Cpu.ProgramSlot >= test.CodeSlot + test.CodeCount);
+                Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeIndex };
+                Cpu.Run(i => Cpu.ProgramSlot >= test.CodeIndex + test.CodeCount);
 
                 var stack = Cpu.ForthStack.ToArray();
                 var result = "FAIL";
@@ -234,7 +234,7 @@ namespace ForthCompiler
 
             if (item != null)
             {
-                Cpu.ProgramSlot = item.CodeSlot;
+                Cpu.ProgramSlot = ProgramSlot = item.CodeIndex;
             }
 
             Refresh();

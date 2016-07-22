@@ -25,8 +25,9 @@ namespace ForthCompiler
         public Cpu(Compiler compiler)
         {
             _codeslots = compiler.CodeSlots.ToArray();
-            _definitions = compiler.Labels.Where(l => l.Key.StartsWith("Global."))
-                                          .ToDictionary(l => l.Value.CodeSlot, l => l.Key);
+            _definitions = _codeslots.Where(cs => cs?.Label?.StartsWith("Global.") == true)
+                                     .GroupBy(cs => cs.CodeIndex)
+                                     .ToDictionary(cs => cs.Key, cs => cs.First().Label);
             CallStack.Push(new Structure { Name = "Global.Global.0" });
         }
 

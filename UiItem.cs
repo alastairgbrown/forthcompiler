@@ -18,7 +18,7 @@ namespace ForthCompiler
         protected static readonly Dictionary<TokenType, Brush> TokenColors = new Dictionary<TokenType, Brush>();
         protected static readonly Dictionary<string, Brush> KeywordColors = new Dictionary<string, Brush>(OrdinalIgnoreCase);
 
-        public UiItem()
+        static UiItem()
         {
             try
             {
@@ -27,13 +27,13 @@ namespace ForthCompiler
                         x => x.Attribute("name").Value,
                         x => new SolidColorBrush((Color)(ConvertFromString("#" + x.Attribute("fgColor").Value) ?? Colors.Black)),
                         OrdinalIgnoreCase);
-                var regex = new Regex(@"(?<a>Keywords\d)|(?<a>Operators)1|(?<a>Folder)s(?<b> in \w+)");
+                var regex = new Regex(@"(Keywords\d)|(Operators)1|(Folder)s( in \w+)");
 
                 foreach (var item in xml.XPathSelectElements("//Keywords")
                                         .Select(x => new { regex.Match(x.Attribute("name").Value).Groups, x.Value })
                                         .Where(x => x.Groups["a"].Success))
                 {
-                    var name = $"{item.Groups["a"]}{item.Groups["b"]}";
+                    var name = string.Join(null, item.Groups.OfType<Group>().Skip(1));
 
                     foreach (Match keyword in Regex.Matches(item.Value, @"\S+"))
                     {
@@ -48,7 +48,7 @@ namespace ForthCompiler
                 TokenColors[TokenType.Definition] = KeywordColors.At("DEFINITION_IDENTIFIER") ?? Brushes.Magenta;
                 TokenColors[TokenType.Error] = KeywordColors.At("ERROR_IDENTIFIER") ?? Brushes.Red;
             }
-            catch (Exception ex)
+            catch
             {
                 // ignored, it's not the end of the world if we don't have colored text
             }

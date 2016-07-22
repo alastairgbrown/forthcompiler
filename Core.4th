@@ -87,7 +87,7 @@ Macro 0<> /Zeq /Zeq EndMacro
     TestCase 0<> "0" 0 0<> EndTestCase
     TestCase 0<> "-1" 1 0<> EndTestCase
 
-Macro _IsNegative $80000000 - /psh /xor /psh /adc EndMacro
+Macro _IsNegative /psh /add /psh /xor /psh /adc EndMacro
 	TestCase _IsNegative 1 -2 _IsNegative EndTestCase
 	TestCase _IsNegative 1 -1 _IsNegative EndTestCase
 	TestCase _IsNegative 0 0 _IsNegative EndTestCase

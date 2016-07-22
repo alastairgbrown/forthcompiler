@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
@@ -24,12 +25,13 @@ namespace ForthCompiler
         public int X { get; }
         public string Text { get; set; }
         public TokenType TokenType { get; set; }
-        public int CodeSlot { get; set; }
+        public CodeSlot CodeSlot { get; set; }
+        public int CodeIndex { get; set; }
         public int CodeCount { get; set; }
 
         public override string ToString()
         {
-            return $"{File}({Y+1},{X+1}) : {Text}";
+            return $"{File}({Y+1},{X+1}) : {Text} {CodeSlot} {CodeIndex} {CodeCount}";
         }
     }
 }

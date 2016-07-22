@@ -81,12 +81,22 @@ namespace ForthCompiler
 
         public static bool Contains(this ISlotRange token, int slot)
         {
-            return slot >= token.CodeSlot && slot < token.CodeSlot + token.CodeCount;
+            return slot >= token.CodeIndex && slot < token.CodeIndex + token.CodeCount;
         }
 
         public static string Dequote(this string text)
         {
             return text.Trim('"');
+        }
+
+        public static T Validate<T>(this T obj, Predicate<T> func, string message)
+        {
+            if (!(func ?? (x => x != null))(obj))
+            {
+                throw new Exception(message);
+            }
+
+            return obj;
         }
 
         public static string LoadFileOrResource([NotNull]this string name)

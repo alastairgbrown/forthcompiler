@@ -173,6 +173,8 @@ namespace ForthCompiler
         Lsr,
         Zeq,
         Lit,
+        Label,
+        Address,
     }
 
     public enum TokenType
@@ -188,7 +190,7 @@ namespace ForthCompiler
 
     public interface ISlotRange
     {
-        int CodeSlot { get; }
+        int CodeIndex { get; }
         int CodeCount { get; }
     }
 }
