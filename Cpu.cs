@@ -7,7 +7,7 @@ namespace ForthCompiler
 {
     public class Cpu
     {
-        public int ProgramSlot { get; set; }
+        public int ProgramIndex { get; set; }
         public SortedDictionary<int, int> Heap { get; } = new SortedDictionary<int, int>();
         public Dictionary<int, int> LastHeap { get; set; } = new Dictionary<int, int>();
         public Stack<int> Stack { get; } = new Stack<int>();
@@ -16,15 +16,15 @@ namespace ForthCompiler
 
         private int _top;
         private int _next;
-        private bool _carry;
+        private int _carry;
         private string _error;
         public object[] LastState { get; private set; }
-        private readonly CodeSlot[] _codeslots;
-        private Dictionary<int, string> _definitions;
+        private readonly List<CodeSlot> _codeslots;
+        private readonly Dictionary<int, string> _definitions;
 
         public Cpu(Compiler compiler)
         {
-            _codeslots = compiler.CodeSlots.ToArray();
+            _codeslots = compiler.CodeSlots;
             _definitions = _codeslots.Where(cs => cs?.Label?.StartsWith("Global.") == true)
                                      .GroupBy(cs => cs.CodeIndex)
                                      .ToDictionary(cs => cs.Key, cs => cs.First().Label);
@@ -33,24 +33,24 @@ namespace ForthCompiler
 
         public IEnumerable<object> CurrState => new object[]
         {
-            "PS=",ProgramSlot,
-            " SP=",Stack.Count,
-            " Top=",_top,
-            " Next=",_next,
-            " Carry=",_carry,
-            " ",_error,
-            Environment.NewLine,
+            "PS=", ProgramIndex,
+            ProgramIndex == 0 ? "(Start)" : ProgramIndex == _codeslots.Count ? "(End)" : "",
+            " SP=", Stack.Count,
+            " Top=", _top,
+            " Next=", _next,
+            " Carry=", _carry,
+            " ",_error,Environment.NewLine,
             "Stack=",
-        }.Concat(ForthStack.Reverse().SelectMany(i => new object[] {i, " " }));
+        }.Concat(ForthStack.Take(30).Reverse().SelectMany(i => new object[] { i, " " }));
 
         void Step()
         {
-            if (ProgramSlot < 0 || ProgramSlot >= _codeslots.Length)
+            if (ProgramIndex < 0 || ProgramIndex >= _codeslots.Count)
             {
                 throw new Exception("Outside executable code");
             }
 
-            var code = _codeslots[ProgramSlot++];
+            var code = _codeslots[ProgramIndex++];
             ulong add;
 
             switch (code.Code)
@@ -79,31 +79,31 @@ namespace ForthCompiler
                 case Code.Jnz:
                     if (_top != 0)
                     {
-                        ProgramSlot = _top * 8;
+                        ProgramIndex = _top * 8;
                     }
                     _top = _next;
                     _next = Stack.Pop();
                     break;
                 case Code.Jsr:
-                    var temp = (ProgramSlot + 7) / 8;
-                    ProgramSlot = _top * 8;
+                    var temp = (ProgramIndex + 7) / 8;
+                    ProgramIndex = _top * 8;
                     _top = temp;
                     break;
                 case Code.Add:
                     add = (ulong)unchecked((uint)_next) + unchecked((uint)_top);
-                    _carry = (add & (1ul << 32)) != 0;
+                    _carry = (int)(add >> 32) & 1;
                     _top = unchecked((int)add);
                     _next = Stack.Pop();
                     break;
                 case Code.Adc:
-                    add = (ulong)unchecked((uint)_next) + unchecked((uint)_top) + (_carry ? 1u : 0);
-                    _carry = (add & (1ul << 32)) != 0;
+                    add = (ulong)unchecked((uint)_next) + unchecked((uint)_top) + (uint)_carry;
+                    _carry = (int)(add >> 32) & 1;
                     _top = unchecked((int)add);
                     _next = Stack.Pop();
                     break;
                 case Code.Sub:
                     add = (ulong)unchecked((uint)_next) + ~unchecked((uint)_top) + 1;
-                    _carry = (add & (1ul << 32)) != 0;
+                    _carry = (int)(add >> 32) & 1;
                     _top = unchecked((int)add);
                     _next = Stack.Pop();
                     break;
@@ -116,7 +116,7 @@ namespace ForthCompiler
                     _next = Stack.Pop();
                     break;
                 case Code.Lsr:
-                    _carry = (_top & 1) == 1;
+                    _carry = _top & 1;
                     _top = _top >> 1;
                     break;
                 case Code.Zeq:
@@ -129,21 +129,21 @@ namespace ForthCompiler
                     break;
             }
 
-            while (ProgramSlot >= 0 && ProgramSlot < _codeslots.Length && _codeslots[ProgramSlot] == null)
+            while (ProgramIndex >= 0 && ProgramIndex < _codeslots.Count && _codeslots[ProgramIndex] == null)
             {
-                ProgramSlot++;
+                ProgramIndex++;
             }
         }
 
-        public void Run(Func<int, bool> breakCondition)
+        public void Run(Func<bool> breakCondition)
         {
             _error = null;
             LastState = CurrState.ToArray();
             LastHeap = Heap.ToDictionary(h => h.Key, h => h.Value);
 
-            for (int i = 0; i == 0 || !breakCondition(i); i++)
+            for (int i = 0; ProgramIndex != _codeslots.Count && (i == 0 || !breakCondition()); i++)
             {
-                var lastSlot = ProgramSlot;
+                var lastSlot = ProgramIndex;
 
                 try
                 {
@@ -159,18 +159,18 @@ namespace ForthCompiler
                     break;
                 }
 
-                if (_codeslots[lastSlot].Code == Code.Jsr && _definitions.ContainsKey(ProgramSlot))
+                if (_codeslots[lastSlot].Code == Code.Jsr && _definitions.ContainsKey(ProgramIndex))
                 {
-                    var next = Enumerable.Range(0, _codeslots.Length).Skip(_top * 8).First(cs => _codeslots[cs] != null);
+                    var next = Enumerable.Range(0, _codeslots.Count+1).Skip(_top * 8).First(cs => cs == _codeslots.Count || _codeslots[cs] != null);
                     CallStack.Peek().Value = next;
-                    CallStack.Push(new Structure { Name = _definitions[ProgramSlot] });
+                    CallStack.Push(new Structure { Name = _definitions[ProgramIndex] });
                 }
-                else if (CallStack.Count >= 2 && ProgramSlot == CallStack.Skip(1).First().Value)
+                else if (CallStack.Count >= 2 && ProgramIndex == CallStack.Skip(1).First().Value)
                 {
                     CallStack.Pop();
                 }
 
-                CallStack.Peek().Value = ProgramSlot;
+                CallStack.Peek().Value = ProgramIndex;
             }
         }
     }

@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -104,13 +103,13 @@ namespace ForthCompiler
                 }
                 catch (Exception ex)
                 {
-                    var pos = compiler.ArgumentToken;
+                    var pos = compiler.ArgToken;
                     var line = compiler.Sources[pos.File][pos.Y];
-                    error = $"Error:  {ex.Message}{Environment.NewLine}" +
-                            $"File:   {pos.File}({pos.Y + 1},{pos.X + 1}){Environment.NewLine}" +
-                            $"Line:   {line.Substring(0, pos.X)}<<>>{line.Substring(pos.X)}";
+                    error = $"Error: {ex.Message}{Environment.NewLine}" +
+                            $"File:  {pos.File}({pos.Y + 1},{pos.X + 1}){Environment.NewLine}" +
+                            $"Line:  {line.Substring(0, pos.X)}<<>>{line.Substring(pos.X)}";
                     Console.WriteLine(error);
-                    compiler.Tokens.SkipWhile(t => t != compiler.ArgumentToken).ToList().ForEach(t => t.TokenType = TokenType.Error);
+                    compiler.Tokens.SkipWhile(t => t != compiler.ArgToken).ForEach(t => t.TokenType = TokenType.Error);
                     compiler.PostCompile();
                 }
             }
@@ -139,17 +138,17 @@ namespace ForthCompiler
             }
             else if (argMap.ContainsKey("-testcases"))
             {
-                compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.TestCases.Values.ToArray());
+                compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.GenerateTestCases().ToArray());
             }
 
             compiler.Precompile();
             compiler.Compile();
+            compiler.Optimize(!argMap.ContainsKey("-nooptimize"));
             compiler.PostCompile();
-            compiler.CheckSequences();
 
             if (argMap.ContainsKey("-mif"))
             {
-                File.WriteAllLines(argMap["-mif"], compiler.MakeMif());
+                File.WriteAllLines(argMap["-mif"], compiler.GenerateMif());
                 Console.WriteLine($"Generated: {argMap["-mif"]}");
             }
         }

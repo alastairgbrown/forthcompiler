@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
@@ -31,7 +30,7 @@ namespace ForthCompiler
 
                 foreach (var item in xml.XPathSelectElements("//Keywords")
                                         .Select(x => new { regex.Match(x.Attribute("name").Value).Groups, x.Value })
-                                        .Where(x => x.Groups["a"].Success))
+                                        .Where(x => x.Groups[0].Success))
                 {
                     var name = string.Join(null, item.Groups.OfType<Group>().Skip(1));
 
@@ -43,9 +42,9 @@ namespace ForthCompiler
 
                 TokenColors[TokenType.Excluded] = brushes.At("COMMENTS") ?? Brushes.Green;
                 TokenColors[TokenType.Literal] = brushes.At("NUMBERS") ?? Brushes.Magenta;
-                TokenColors[TokenType.Constant] = KeywordColors.At("CONSTANT_IDENTIFIER") ?? Brushes.Magenta;
-                TokenColors[TokenType.Variable] = KeywordColors.At("VARIABLE_IDENTIFIER") ?? Brushes.Magenta;
-                TokenColors[TokenType.Definition] = KeywordColors.At("DEFINITION_IDENTIFIER") ?? Brushes.Magenta;
+                TokenColors[TokenType.Constant] = KeywordColors.At("CONSTANT_IDENTIFIER") ?? Brushes.Black;
+                TokenColors[TokenType.Variable] = KeywordColors.At("VARIABLE_IDENTIFIER") ?? Brushes.Black;
+                TokenColors[TokenType.Definition] = KeywordColors.At("DEFINITION_IDENTIFIER") ?? Brushes.Black;
                 TokenColors[TokenType.Error] = KeywordColors.At("ERROR_IDENTIFIER") ?? Brushes.Red;
             }
             catch

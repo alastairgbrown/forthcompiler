@@ -5,8 +5,8 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using ForthCompiler.Annotations;
+using static System.StringComparison;
 
 namespace ForthCompiler
 {
@@ -14,10 +14,10 @@ namespace ForthCompiler
     {
         public static bool IsEqual(this string a, string b)
         {
-            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase) == 0;
+            return string.Compare(a, b, OrdinalIgnoreCase) == 0;
         }
 
-        public static void Sort<T>(this ObservableCollection<T> collection, Comparison<T> comparison)
+        public static void Sort<T>([NotNull]this ObservableCollection<T> collection, Comparison<T> comparison)
         {
             var sortableList = new List<T>(collection);
             sortableList.Sort(comparison);
@@ -28,7 +28,7 @@ namespace ForthCompiler
             }
         }
 
-        public static void AddRange(this IList collection, IEnumerable items)
+        public static void AddRange([NotNull]this IList collection, IEnumerable items)
         {
             foreach (var item in items)
             {
@@ -36,7 +36,7 @@ namespace ForthCompiler
             }
         }
 
-        public static void RemoveRange(this IList collection, int index, int count)
+        public static void RemoveRange([NotNull]this IList collection, int index, int count)
         {
             for (int i = count - 1; i >= 0; i--)
             {
@@ -44,19 +44,27 @@ namespace ForthCompiler
             }
         }
 
-        public static TV At<TK, TV>(this IDictionary<TK, TV> dict, TK key)
+        public static TV At<TK, TV>([NotNull]this IDictionary<TK, TV> dict, TK key)
         {
             TV value;
             return dict.TryGetValue(key, out value) ? value : default(TV);
         }
 
-        public static T At<TD, T>(this Dictionary<string, TD> dict, string key, Func<T> createFunc, bool exclusive = false) where T : TD
+        public static void ForEach<T>([NotNull]this IEnumerable<T> items, Action<T> action)
+        {
+            foreach (var item in items)
+            {
+                action(item);
+            }
+        }
+
+        public static T At<TD, T>([NotNull]this Dictionary<string, TD> dict, string key, Func<T> createFunc, bool exclusive = false) where T : TD
         {
             TD entry;
 
-            if (dict.TryGetValue(key, out entry) && (exclusive || !(entry is T)))
+            if (dict.TryGetValue(key, out entry))
             {
-                throw new Exception($"{key} already defined as {entry.GetType().Name}");
+                entry.Validate(e => $"{key} is already defined as a {e.GetType().Name}", e => e is T && !exclusive);
             }
 
             var t = (T)entry;
@@ -69,31 +77,28 @@ namespace ForthCompiler
             return t;
         }
 
-        public static Structure Pop(this Stack<Structure> stack, string name)
+        public static Structure Pop([NotNull]this Stack<Structure> stack, string name)
         {
-            if (!stack.Any() || !stack.Peek().Name.IsEqual(name))
-            {
-                throw new Exception($"Missing close for {name}");
-            }
+            stack.Validate(s => $"Missing {name}", s => (stack.FirstOrDefault()?.Name).IsEqual(name));
 
             return stack.Pop();
         }
 
-        public static bool Contains(this ISlotRange token, int slot)
+        public static bool Contains([NotNull]this ISlotRange token, int slot)
         {
             return slot >= token.CodeIndex && slot < token.CodeIndex + token.CodeCount;
         }
 
         public static string Dequote(this string text)
         {
-            return text.Trim('"');
+            return (text ?? string.Empty).Trim('"',' ','\t');
         }
 
-        public static T Validate<T>(this T obj, Predicate<T> func, string message)
+        public static T Validate<T>(this T obj, Func<T,string> message, Predicate<T> func = null)
         {
             if (!(func ?? (x => x != null))(obj))
             {
-                throw new Exception(message);
+                throw new Exception(message(obj));
             }
 
             return obj;
@@ -101,34 +106,28 @@ namespace ForthCompiler
 
         public static string LoadFileOrResource([NotNull]this string name)
         {
-            if (false && File.Exists(name))
+            if (File.Exists(name))
             {
                 return File.ReadAllText(name);
             }
 
-            var data = Resource.ResourceManager.GetObject(Path.GetFileNameWithoutExtension(name));
-            var stringData = data as string;
-            var byteData = data as byte[];
+            var obj = Resource.ResourceManager.GetObject(Path.GetFileNameWithoutExtension(name));
 
-            if (stringData != null)
+            if (obj is string)
             {
-                return stringData;
+                return obj as string;
             }
 
-            if (byteData != null)
+            if (obj is byte[])
             {
-                foreach (var enc in new[] {Encoding.UTF8})
+                var bytes = obj as byte[];
+                foreach (var enc in new[] { Encoding.UTF8 }
+                          .Where(e => e.GetPreamble().SequenceEqual(bytes.Take(e.GetPreamble().Length))))
                 {
-                    var preamble = enc.GetPreamble();
-
-                    if (byteData.Length >= preamble.Length &&
-                        Enumerable.Range(0, preamble.Length).All(i => byteData[i] == preamble[i]))
-                    {
-                        return enc.GetString(byteData, preamble.Length, byteData.Length - preamble.Length);
-                    }
+                    return enc.GetString(bytes.Skip(enc.GetPreamble().Length).ToArray());
                 }
 
-                return Encoding.ASCII.GetString(byteData);
+                return Encoding.ASCII.GetString(bytes);
             }
 
             throw new Exception($"Can't load {name} resource");
@@ -136,7 +135,12 @@ namespace ForthCompiler
 
         public static string[] SplitLines([NotNull] this string text)
         {
-            return text.Split(new[] {"\r\n", "\r", "\n"}, 0);
+            return text.Split(new[] { "\r\n", "\r", "\n" }, 0);
+        }
+
+        public static void SetCount<T>([NotNull] this List<T> list, int count)
+        {
+            list.RemoveRange(count, list.Count - count);
         }
     }
 }

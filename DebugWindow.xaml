@@ -35,16 +35,19 @@
         <CommandBinding Command="{x:Static local:Shortcuts.StepOver}" Executed="StepOver_Click"/>
         <CommandBinding Command="{x:Static local:Shortcuts.StepInto}" Executed="StepInto_Click"/>
         <CommandBinding Command="{x:Static local:Shortcuts.StepOut}" Executed="StepOut_Click"/>
+        <CommandBinding Command="{x:Static local:Shortcuts.Execute}" Executed="CommandLineRun_Click"/>
     </Window.CommandBindings>
 
     <Grid Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}" Margin="3">
         <Grid.RowDefinitions>
-            <RowDefinition Height="22" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="46" />
-            <RowDefinition Height="8" />
-            <RowDefinition Height="76*" />
+            <RowDefinition Height="4" />
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="4"/>
+            <RowDefinition Height="151*" />
             <RowDefinition Height="9" />
-            <RowDefinition Height="39*" />
+            <RowDefinition Height="49*" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="20" />
@@ -69,10 +72,11 @@
                 <MenuItem x:Name="MacroLevel3" Header="Macro Level 3" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
                 <MenuItem x:Name="MacroLevel4" Header="Macro Level 4" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
                 <MenuItem x:Name="MacroLevel5" Header="Macro Level 5" HorizontalAlignment="Left" Click="MacroLevel_Click"/>
-                <Separator HorizontalAlignment="Left" Height="1" Width="159"/>
+                <Separator HorizontalAlignment="Left" Height="1" Width="150"/>
                 <MenuItem x:Name="ShowAsm" Header="Show ASM" HorizontalAlignment="Left" IsCheckable="True" Click="Show_Click"/>
                 <MenuItem x:Name="ShowAddress" Header="Show Address" HorizontalAlignment="Left" IsCheckable="True" Click="Show_Click"/>
-                <MenuItem x:Name="ShowHex" Header="Show Hex" HorizontalAlignment="Left" Width="160" IsCheckable="True" Click="Show_Click"/>
+                <MenuItem x:Name="ShowHex" Header="Show Hex" HorizontalAlignment="Left" IsCheckable="True" Click="Show_Click"/>
+                <MenuItem x:Name="ShowCommandLine" Header="Show Command Line" HorizontalAlignment="Left" IsCheckable="True" Click="ShowCommandLine_Click"/>
             </MenuItem>
         </Menu>
         <Label Content="Status" Margin="-8,12,189,0" Grid.Row="1" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
@@ -86,18 +90,35 @@
             </Label.RenderTransform>
         </Label>
         <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
-            <TextBlock x:Name="Status" FontFamily="Consolas">Status</TextBlock>
+            <TextBlock FontFamily="Consolas">
+                <TextBlock x:Name="CpuStatus" FontFamily="Consolas">Cpu</TextBlock><Run FontFamily="Consolas" Text="&#13;&#10;"></Run><TextBlock x:Name="Status" FontFamily="Consolas">Status</TextBlock>
+            </TextBlock>
         </Border>
-        <Border Grid.Row="3" Grid.Column="1" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
+        <Border x:Name="CommandLineBorder" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Visibility="Collapsed" Padding="2" >
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition/>
+                    <ColumnDefinition Width="40"/>
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="CommandLine" FontFamily="Consolas" TextChanged="CommandLine_TextChanged" KeyUp="CommandLine_KeyUp"/>
+                <Button x:Name="CommandLineRun" Grid.Column="1" Click="CommandLineRun_Click" Grid.Row="0" Grid.RowSpan="2">Run</Button>
+                <Label x:Name="CommandLineTokens" Grid.Row="1" Grid.Column="0" />
+            </Grid>
+        </Border>
+        <Border Grid.Row="5" Grid.Column="1" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
             <ListBox x:Name="HeapListBox" ItemTemplate="{DynamicResource HeapItemTemplate}" BorderBrush="{x:Null}" Background="{x:Null}" />
-         </Border>
-        <Border Grid.Row="3" Grid.Column="3" Grid.RowSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
+        </Border>
+        <Border Grid.Row="5" Grid.Column="3" Grid.RowSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
             <ListBox x:Name="SourceListBox" ItemTemplate="{DynamicResource SourceItemTemplate}" BorderBrush="{x:Null}" Background="{x:Null}" />
         </Border>
-        <Border Grid.Row="5" Grid.Column="1"  BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
+        <Border Grid.Row="7" Grid.Column="1"  BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
             <ListBox x:Name="CallStackListBox" ItemTemplate="{DynamicResource CallStackItemTemplate}" SelectionChanged="CallStackListBox_SelectionChanged" Padding="0" BorderBrush="{x:Null}" Background="{x:Null}"/>
         </Border>
-        <Label Content="Heap" Grid.Row="3" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" Margin="1,32,0,0" Grid.ColumnSpan="2" HorizontalAlignment="Left" Width="31">
+        <Label Content="Heap" Grid.Row="5" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" Margin="1,32,0,0" Grid.ColumnSpan="2" HorizontalAlignment="Left" Width="31">
             <Label.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>
@@ -107,7 +128,7 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <Label Content="Source" Grid.Row="3" Grid.Column="2 " VerticalAlignment="Top" Height="18" Padding="0" Foreground="#FFF58704" Margin="1,39,493,0" Grid.ColumnSpan="2">
+        <Label Content="Source" Grid.Row="5" Grid.Column="2 " VerticalAlignment="Top" Height="18" Padding="0" Foreground="#FFF58704" Margin="1,39,493,0" Grid.ColumnSpan="2">
             <Label.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>
@@ -117,7 +138,7 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <Label Content="Call Stack" Margin="-16,21,179,0" Grid.Row="5" Grid.ColumnSpan="2" Grid.Column="0"
+        <Label Content="Call Stack" Margin="-16,21,179,-5" Grid.Row="7" Grid.ColumnSpan="2" Grid.Column="0"
                VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5">
             <Label.RenderTransform>
                 <TransformGroup>

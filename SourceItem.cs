@@ -9,6 +9,13 @@ namespace ForthCompiler
 {
     public class SourceItem : UiItem, ISlotRange
     {
+        public string TestResult { get; set; }
+
+        public Compiler Compiler => Parent.Compiler;
+        public List<Token> Tokens { get; set; } = new List<Token>();
+        public int CodeIndex => Tokens.FirstOrDefault()?.CodeIndex ?? 0;
+        public int CodeCount => (Tokens.LastOrDefault()?.CodeIndex - 
+                                 Tokens.FirstOrDefault()?.CodeIndex + Tokens.LastOrDefault()?.CodeCount ?? 0);
 
         private int[] _originalCodeCounts;
 
@@ -40,7 +47,7 @@ namespace ForthCompiler
             }
         }
 
-        public bool IsTestCase => string.Join(null, Tokens.Take(6).Select(t => t.Text)).IsEqual("( Test Case ");
+        public bool IsTestCase => string.Join(null, Tokens.Take(4).Select(t => t.Text)).IsEqual("( TestCase ");
 
         public TextBlock Text
         {
@@ -50,7 +57,7 @@ namespace ForthCompiler
 
                 foreach (var token in DisplayTokens)
                 {
-                    bool current = token.Contains(Parent.ProgramSlot);
+                    bool current = token.Contains(Parent.ProgramIndex);
 
                     block.Inlines.Add(new Run
                     {
@@ -67,7 +74,7 @@ namespace ForthCompiler
                         if (codeslot == null)
                             continue;
 
-                        current = Parent.ProgramSlot == i;
+                        current = Parent.ProgramIndex == i;
 
                         block.Inlines.Add(new Run
                         {
@@ -87,7 +94,7 @@ namespace ForthCompiler
 
         public Visibility ShowAddress => Parent.ShowAddress.IsChecked ? Visibility.Visible : Visibility.Collapsed;
 
-        public Brush Background => this.Contains(Parent.ProgramSlot)
+        public Brush Background => this.Contains(Parent.ProgramIndex)
                                         ? Brushes.Yellow
                                         : TestResult == null
                                             ? Brushes.Transparent
@@ -107,11 +114,5 @@ namespace ForthCompiler
 
         public string Tooltip => $"{TestResult} {Tokens.First().File}({Tokens.First().Y + 1})";
 
-        public string TestResult { get; set; }
-
-        public Compiler Compiler => Parent.Compiler;
-        public List<Token> Tokens { get; } = new List<Token>();
-        public int CodeIndex => Tokens.First().CodeIndex;
-        public int CodeCount => Tokens.Last().CodeIndex - Tokens.First().CodeIndex + Tokens.Last().CodeCount;
     }
 }

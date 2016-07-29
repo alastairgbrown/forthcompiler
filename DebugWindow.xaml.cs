@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Drawing;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
+using static System.Math;
 using Brushes = System.Windows.Media.Brushes;
 
 namespace ForthCompiler
@@ -21,9 +22,15 @@ namespace ForthCompiler
         public Compiler Compiler { get; }
 
         public Cpu Cpu { get; set; }
-        public int ProgramSlot { get; set; }
+        public int ProgramIndex { get; set; }
 
         private HashSet<int> _breaks;
+        private readonly int _codeOrig;
+        private readonly int _compOrig;
+        private readonly int _tokenOrig;
+        private SourceItem _commandLine;
+        private List<string> _commandLines = new List<string>();
+
 
         private ObservableCollection<SourceItem> SourceItems { get; } = new ObservableCollection<SourceItem>();
         private ObservableCollection<HeapItem> HeapItems { get; } = new ObservableCollection<HeapItem>();
@@ -35,14 +42,18 @@ namespace ForthCompiler
             InitializeComponent();
 
             Icon = Imaging.CreateBitmapSourceFromHBitmap(
-                        Resource.ForthIcon.ToBitmap().GetHbitmap(), 
-                        IntPtr.Zero, 
-                        Int32Rect.Empty, 
+                        Resource.ForthIcon.ToBitmap().GetHbitmap(),
+                        IntPtr.Zero,
+                        Int32Rect.Empty,
                         BitmapSizeOptions.FromEmptyOptions());
             Compiler = compiler;
             HeapListBox.ItemsSource = HeapItems;
             SourceListBox.ItemsSource = SourceItems;
             CallStackListBox.ItemsSource = CallStackItems;
+            _tokenOrig = Compiler.Tokens.Count;
+            _compOrig = Compiler.Compilation.Count;
+            _codeOrig = Compiler.CodeSlots.Count;
+            _commandLine = new SourceItem { Parent = this };
 
             for (int i = 0; i < Compiler.Tokens.Count; i++)
             {
@@ -59,10 +70,10 @@ namespace ForthCompiler
             if (error != null)
             {
                 Cpu = new Cpu(Compiler);
-                ProgramSlot = (Compiler.ArgumentToken?.CodeIndex ?? 1) - 1;
+                ProgramIndex = (Compiler.ArgToken?.CodeIndex ?? 1) - 1;
                 Refresh();
-                Status.Inlines.Clear();
-                Status.Inlines.Add(new Run { Text = error, Foreground = Brushes.Red });
+                CpuStatus.Inlines.Clear();
+                CpuStatus.Inlines.Add(new Run { Text = error, Foreground = Brushes.Red });
             }
             else if (test)
             {
@@ -79,16 +90,23 @@ namespace ForthCompiler
             var last = Cpu.LastState ?? Cpu.CurrState.ToArray();
             var curr = Cpu.CurrState.ToArray();
 
-            Array.Resize(ref last, Math.Max(last.Length, curr.Length));
-            Array.Resize(ref curr, Math.Max(last.Length, curr.Length));
+            Array.Resize(ref last, Max(last.Length, curr.Length));
+            Array.Resize(ref curr, Max(last.Length, curr.Length));
 
-            Status.Inlines.Clear();
-            Status.Inlines.AddRange(Enumerable.Range(0, curr.Length).Select(
+            CpuStatus.Inlines.Clear();
+            CpuStatus.Inlines.AddRange(Enumerable.Range(0, curr.Length).Select(
                     i => new Run
                     {
                         Text = curr[i] == null ? "-" : curr[i] is int ? Formatter((int)curr[i]) : $"{curr[i]}",
                         Foreground = curr[i] == last[i] ? Brushes.Black : Brushes.Red
                     }));
+            Status.Text = _commandLines.LastOrDefault() ?? "";
+            Status.Foreground = Brushes.Black;
+
+            if (ShowCommandLine.IsChecked)
+            {
+                CommandLineTokens.Content = _commandLine?.Text;
+            }
 
             foreach (var item in SourceItems.Where(si => refreshSource == null || refreshSource(si)))
             {
@@ -105,9 +123,9 @@ namespace ForthCompiler
                 item.WasChanged = item.IsChanged;
             }
 
-            CallStackItems.AddRange(Enumerable.Range(0, Math.Max(0, Cpu.CallStack.Count - CallStackItems.Count))
+            CallStackItems.AddRange(Enumerable.Range(0, Max(0, Cpu.CallStack.Count - CallStackItems.Count))
                                               .Select(i => new CallStackItem { Parent = this }));
-            CallStackItems.RemoveRange(0, Math.Max(0, CallStackItems.Count - Cpu.CallStack.Count));
+            CallStackItems.RemoveRange(0, Max(0, CallStackItems.Count - Cpu.CallStack.Count));
 
             for (int i = 0; i < CallStackItems.Count; i++)
             {
@@ -115,9 +133,9 @@ namespace ForthCompiler
                 CallStackItems[i].Refresh();
             }
 
-            if (SourceItems.Any(si => si.Contains(ProgramSlot)))
+            foreach (var sourceitem in SourceItems.Where(si => si.Contains(ProgramIndex)).Take(1))
             {
-                SourceListBox.ScrollIntoView(SourceItems.First(si => si.Contains(ProgramSlot)));
+                SourceListBox.ScrollIntoView(sourceitem);
             }
         }
 
@@ -126,69 +144,80 @@ namespace ForthCompiler
             return ShowHex.IsChecked ? $"${i:X}" : $"{i}";
         }
 
-        private void Run(Func<int, bool> breakCondition)
+        private void Run(Func<bool> breakCondition)
         {
-            var start = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramSlot));
+            var start = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramIndex));
+
+            if (Cpu.ProgramIndex == _codeOrig && CommandLine.Text.Trim() != "")
+            {
+                _commandLines.Remove(CommandLine.Text);
+                _commandLines.Add(CommandLine.Text);
+            }
 
             _breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeIndex));
             Cpu.Run(breakCondition);
 
-            ProgramSlot = Cpu.ProgramSlot;
-            Refresh(si => si == start || si.Contains(ProgramSlot), hi => hi.IsChanged || hi.WasChanged);
+            ProgramIndex = Cpu.ProgramIndex;
+            Refresh(si => si == start || si.Contains(ProgramIndex), hi => hi.IsChanged || hi.WasChanged);
         }
 
 
         private void StepAsm_Click(object sender, RoutedEventArgs e)
         {
-            Run(i => true);
+            Run(() => true);
         }
 
         private void StepToken_Click(object sender, RoutedEventArgs e)
         {
-            var token = Compiler.Tokens.FirstOrDefault(t => t.Contains(Cpu.ProgramSlot));
+            var token = Compiler.Tokens.First(t => t.Contains(Cpu.ProgramIndex));
 
-            Run(i => !token.Contains(Cpu.ProgramSlot));
+            Run(() => !token.Contains(Cpu.ProgramIndex));
         }
 
         private void StepOver_Click(object sender, RoutedEventArgs e)
         {
-            var line = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramSlot));
-            var callstack = Cpu.CallStack.Count;
+            var line = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramIndex));
+            var callstackDepth = Cpu.CallStack.Count;
 
-            Run(i => line == null || (!line.Contains(Cpu.ProgramSlot) && Cpu.CallStack.Count <= callstack) || _breaks.Contains(Cpu.ProgramSlot));
+            Run(() => line == null || (Cpu.CallStack.Count <= callstackDepth && !line.Contains(Cpu.ProgramIndex)) || _breaks.Contains(Cpu.ProgramIndex));
         }
 
         private void StepInto_Click(object sender, RoutedEventArgs e)
         {
-            var line = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramSlot));
+            var line = SourceItems.Concat(new[] { _commandLine }).FirstOrDefault(si => si.Contains(Cpu.ProgramIndex));
 
-            Run(i => line == null || !line.Contains(Cpu.ProgramSlot) || _breaks.Contains(Cpu.ProgramSlot));
+            Run(() => line == null || !line.Contains(Cpu.ProgramIndex) || _breaks.Contains(Cpu.ProgramIndex));
         }
 
         private void StepOut_Click(object sender, RoutedEventArgs e)
         {
-            var callstack = Cpu.CallStack.Count;
+            var callstackDepth = Cpu.CallStack.Count;
 
-            Run(i => Cpu.CallStack.Count < callstack || _breaks.Contains(Cpu.ProgramSlot));
+            Run(() => Cpu.CallStack.Count < callstackDepth || _breaks.Contains(Cpu.ProgramIndex));
         }
 
         private void Run_Click(object sender, RoutedEventArgs e)
         {
-            Run(i => i > 0 && _breaks.Contains(Cpu.ProgramSlot));
+            Run(() => _breaks.Contains(Cpu.ProgramIndex));
         }
 
         private void Restart_Click(object sender, RoutedEventArgs e)
         {
+            Compiler.Tokens.SetCount(_tokenOrig);
+            Compiler.Compilation.SetCount(_compOrig);
+            Compiler.CodeSlots.SetCount(_codeOrig);
+            CommandLine.Text = "";
             Cpu = new Cpu(Compiler);
-            ProgramSlot = 0;
+            ProgramIndex = 0;
 
             HeapItems.Clear();
-            foreach (var variable in Compiler.Dict.Select(v => new { v.Key, Value = v.Value as VariableEntry }).Where(v => v.Value != null))
+            foreach (var variable in Compiler.Words.Select(v => new { v.Key, Value = v.Value as Variable }).Where(v => v.Value != null))
             {
                 HeapItems.Add(new HeapItem { Parent = this, Name = variable.Key, Address = variable.Value.HeapAddress });
             }
 
-            SourceItems.ToList().ForEach(si => si.TestResult = null);
+            SourceItems.ForEach(si => si.TestResult = null);
+
             Refresh();
         }
 
@@ -199,8 +228,8 @@ namespace ForthCompiler
 
             foreach (var test in tests.Where(t => t.IsTestCase))
             {
-                Cpu = new Cpu(Compiler) { ProgramSlot = test.CodeIndex };
-                Cpu.Run(i => Cpu.ProgramSlot >= test.CodeIndex + test.CodeCount);
+                Cpu = new Cpu(Compiler) { ProgramIndex = test.CodeIndex };
+                Cpu.Run(() => Cpu.ProgramIndex >= test.CodeIndex + test.CodeCount);
 
                 var stack = Cpu.ForthStack.ToArray();
                 var result = "FAIL";
@@ -221,11 +250,10 @@ namespace ForthCompiler
                 results[result]++;
             }
 
-            ProgramSlot = Cpu.ProgramSlot;
+            ProgramIndex = Cpu.ProgramIndex;
             Refresh();
 
-            Status.Inlines.Clear();
-            Status.Inlines.Add(new Run { Text = $"Test result - {string.Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}" });
+            Status.Text = $"Test result - {string.Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}";
         }
 
         private void SetPc_Click(object sender, RoutedEventArgs e)
@@ -234,7 +262,7 @@ namespace ForthCompiler
 
             if (item != null)
             {
-                Cpu.ProgramSlot = ProgramSlot = item.CodeIndex;
+                Cpu.ProgramIndex = ProgramIndex = item.CodeIndex;
             }
 
             Refresh();
@@ -259,8 +287,68 @@ namespace ForthCompiler
         {
             if (CallStackListBox.SelectedItem != null)
             {
-                ProgramSlot = ((CallStackItem)CallStackListBox.SelectedItem).Item.Value;
-                Refresh(si => Cpu.CallStack.Any(csi => si.Contains(csi.Value)), hi => hi.IsChanged || hi.WasChanged);
+                ProgramIndex = ((CallStackItem)CallStackListBox.SelectedItem).Item.Value;
+                Refresh(si => Cpu.CallStack.Any(csi => si.Contains(csi.Value)), hi => hi.IsChanged);
+            }
+        }
+
+        private void ShowCommandLine_Click(object sender, RoutedEventArgs e)
+        {
+            CommandLineBorder.Visibility = ShowCommandLine.IsChecked ? Visibility.Visible : Visibility.Collapsed;
+            CommandLine.Focus();
+        }
+
+        private void CommandLineRun_Click(object sender, RoutedEventArgs e)
+        {
+            if (ShowCommandLine.IsChecked)
+            {
+                Cpu.ProgramIndex = ProgramIndex = _codeOrig;
+                Run_Click(null, null);
+                CommandLine.Text = "";
+            }
+        }
+
+        private void CommandLine_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            try
+            {
+                var start = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramIndex));
+
+                Compiler.Tokens.SetCount(_tokenOrig);
+                Compiler.Compilation.SetCount(_compOrig);
+                Compiler.CodeSlots.SetCount(_codeOrig);
+                Compiler.ReadFile(_tokenOrig, "CommandLine", x => 0, y => 0, CommandLine.Text);
+                Compiler.Compile(_tokenOrig);
+                Compiler.PostCompile(_codeOrig, _compOrig, _tokenOrig);
+
+                Cpu.ProgramIndex = ProgramIndex = _codeOrig;
+                _commandLine = new SourceItem { Parent = this, Tokens = Compiler.Tokens.Skip(_tokenOrig).ToList()};
+                Refresh(si => si == start || si.Contains(ProgramIndex), hi => false);
+            }
+            catch (Exception ex)
+            {
+                Compiler.Tokens.SkipWhile(t => t != Compiler.ArgToken).ForEach(t => t.TokenType = TokenType.Error);
+                _commandLine = new SourceItem { Parent = this, Tokens = Compiler.Tokens.Skip(_tokenOrig).ToList() };
+                Refresh(si => false, hi => false);
+                Status.Text = ex.Message;
+                Status.Foreground = Brushes.Red;
+            }
+        }
+
+        private void CommandLine_KeyUp(object sender, KeyEventArgs e)
+        {
+            if ((e.Key == Key.Up || e.Key == Key.Down) && _commandLines.Any())
+            {
+                var index = _commandLines.IndexOf(CommandLine.Text);
+
+                if (e.Key == Key.Up)
+                {
+                    CommandLine.Text = index < 0 ? _commandLines.Last() : _commandLines[Max(index-1, 0)];
+                }
+                else
+                {
+                    CommandLine.Text = index < 0 || index + 1 >= _commandLines.Count ? "" : _commandLines[index + 1];
+                }
             }
         }
     }

@@ -64,7 +64,6 @@
     <Compile Include="HeapItem.cs" />
     <Compile Include="IDictEntry.cs" />
     <Compile Include="ExtensionMethods.cs" />
-    <Compile Include="Macro.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\Annotations.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -75,6 +74,7 @@
     </Compile>
     <Compile Include="Shortcuts.cs" />
     <Compile Include="SourceItem.cs" />
+    <Compile Include="Structure.cs" />
     <Compile Include="Token.cs" />
     <Compile Include="UiItem.cs" />
   </ItemGroup>
