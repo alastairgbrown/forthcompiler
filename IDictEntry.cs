@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace ForthCompiler
 {
@@ -9,13 +10,12 @@ namespace ForthCompiler
 
     public class Variable : IDictEntry
     {
+        public int HeapAddress { get; set; }
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Variable;
             compiler.Encode(HeapAddress);
         }
-
-        public int HeapAddress { get; set; }
     }
 
     public class Constant : IDictEntry
@@ -31,10 +31,17 @@ namespace ForthCompiler
 
     public class Definition : IDictEntry
     {
+        public string Label { get; set; }
+
+        public Definition(string label)
+        {
+            Label = label;
+        }
+
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Definition;
-            compiler.Macro($"addr Global.{compiler.Token.Text} /jsr label Global.Placeholder");
+            compiler.Macro($"addr {Label} /jsr label Global.Placeholder");
         }
     }
 
@@ -53,11 +60,28 @@ namespace ForthCompiler
 
     public class Macro : IDictEntry
     {
-        public string Text { get; set; }
+        public List<Token> Tokens { get; set; }
+
+        public Dictionary<bool,List<string>> Prereqs { get; set; }
 
         public void Process(Compiler compiler)
         {
-            compiler.Macro(Text);
+            Definition definition = null;
+
+            if (Tokens.Any(t => t.Text.IsEqual("IsDefinition")))
+            {
+                compiler.ParseWhiteSpace();
+                compiler.Token.TokenType = TokenType.Definition;
+                var name = compiler.Token.Text.Dequote();
+                definition = compiler.Words.At(name, () => new Definition($"Global.{name}"), true);
+            }
+
+            var token = compiler.Token;
+
+            compiler.Tokens.InsertRange(
+                compiler.TokenIndex + 1,
+                Tokens.Where(t => !t.Text.IsEqual("IsDefinition")).Select(t =>
+                    token.Clone(t.Text.Replace("{Label}", definition?.Label ?? "{Label}"), token.MacroLevel + 1, t.TokenType)));
         }
     }
 
@@ -69,6 +93,7 @@ namespace ForthCompiler
         {
             compiler.Encode(Code);
         }
+
     }
 
 }

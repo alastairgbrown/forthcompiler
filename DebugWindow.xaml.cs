@@ -1,13 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media.Imaging;
+using static System.Linq.Enumerable;
 using static System.Math;
 using Brushes = System.Windows.Media.Brushes;
 
@@ -29,7 +30,7 @@ namespace ForthCompiler
         private readonly int _compOrig;
         private readonly int _tokenOrig;
         private SourceItem _commandLine;
-        private List<string> _commandLines = new List<string>();
+        private readonly List<string> _commandLines = new List<string>();
 
 
         private ObservableCollection<SourceItem> SourceItems { get; } = new ObservableCollection<SourceItem>();
@@ -40,12 +41,7 @@ namespace ForthCompiler
         public DebugWindow(Compiler compiler, bool test, string error)
         {
             InitializeComponent();
-
-            Icon = Imaging.CreateBitmapSourceFromHBitmap(
-                        Resource.ForthIcon.ToBitmap().GetHbitmap(),
-                        IntPtr.Zero,
-                        Int32Rect.Empty,
-                        BitmapSizeOptions.FromEmptyOptions());
+            Icon = BitmapFrame.Create(new MemoryStream("ForthIcon.ico".LoadBytes()));
             Compiler = compiler;
             HeapListBox.ItemsSource = HeapItems;
             SourceListBox.ItemsSource = SourceItems;
@@ -94,10 +90,10 @@ namespace ForthCompiler
             Array.Resize(ref curr, Max(last.Length, curr.Length));
 
             CpuStatus.Inlines.Clear();
-            CpuStatus.Inlines.AddRange(Enumerable.Range(0, curr.Length).Select(
+            CpuStatus.Inlines.AddRange(Range(0, curr.Length).Select(
                     i => new Run
                     {
-                        Text = curr[i] == null ? "-" : curr[i] is int ? Formatter((int)curr[i]) : $"{curr[i]}",
+                        Text = curr[i] == null ? "-" : curr[i] is int ? FormatNumber((int)curr[i]) : $"{curr[i]}",
                         Foreground = curr[i] == last[i] ? Brushes.Black : Brushes.Red
                     }));
             Status.Text = _commandLines.LastOrDefault() ?? "";
@@ -123,7 +119,7 @@ namespace ForthCompiler
                 item.WasChanged = item.IsChanged;
             }
 
-            CallStackItems.AddRange(Enumerable.Range(0, Max(0, Cpu.CallStack.Count - CallStackItems.Count))
+            CallStackItems.AddRange(Range(0, Max(0, Cpu.CallStack.Count - CallStackItems.Count))
                                               .Select(i => new CallStackItem { Parent = this }));
             CallStackItems.RemoveRange(0, Max(0, CallStackItems.Count - Cpu.CallStack.Count));
 
@@ -139,9 +135,14 @@ namespace ForthCompiler
             }
         }
 
-        public string Formatter(int i)
+        public string FormatNumber(int i)
         {
             return ShowHex.IsChecked ? $"${i:X}" : $"{i}";
+        }
+
+        public string FormatAddress(int i)
+        {
+            return $"{FormatNumber(i)}/{FormatNumber(i/8)}.{FormatNumber(i%8)}";
         }
 
         private void Run(Func<bool> breakCondition)
@@ -254,6 +255,7 @@ namespace ForthCompiler
             Refresh();
 
             Status.Text = $"Test result - {string.Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}";
+            Status.Foreground = results["FAIL"] == 0 && results["PASS"] > 0 ? Brushes.Green : Brushes.Red;
         }
 
         private void SetPc_Click(object sender, RoutedEventArgs e)
@@ -310,6 +312,25 @@ namespace ForthCompiler
 
         private void CommandLine_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (CommandLine.Text.IsEqual("Words"))
+            {
+                CpuStatus.Inlines.Clear();
+                CpuStatus.Inlines.AddRange(Compiler.Words.Keys.OrderBy(w => w).Select(w => 
+                    new Run
+                    {
+                        Text = w + " ",
+                        Foreground = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).Foreground,
+                        FontWeight = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).FontWeight,
+                        FontStyle = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).FontStyle,
+                        TextDecorations = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).TextDecoration,
+                        ToolTip = Compiler.Doc.At(w)
+                    
+                    }));
+                Status.Text = "";
+                CommandLineTokens.Content = null;
+                return;
+            }
+
             try
             {
                 var start = SourceItems.FirstOrDefault(si => si.Contains(Cpu.ProgramIndex));
@@ -322,7 +343,7 @@ namespace ForthCompiler
                 Compiler.PostCompile(_codeOrig, _compOrig, _tokenOrig);
 
                 Cpu.ProgramIndex = ProgramIndex = _codeOrig;
-                _commandLine = new SourceItem { Parent = this, Tokens = Compiler.Tokens.Skip(_tokenOrig).ToList()};
+                _commandLine = new SourceItem { Parent = this, Tokens = Compiler.Tokens.Skip(_tokenOrig).ToList() };
                 Refresh(si => si == start || si.Contains(ProgramIndex), hi => false);
             }
             catch (Exception ex)
@@ -343,13 +364,26 @@ namespace ForthCompiler
 
                 if (e.Key == Key.Up)
                 {
-                    CommandLine.Text = index < 0 ? _commandLines.Last() : _commandLines[Max(index-1, 0)];
+                    CommandLine.Text = index < 0 ? _commandLines.Last() : _commandLines[Max(index - 1, 0)];
                 }
                 else
                 {
                     CommandLine.Text = index < 0 || index + 1 >= _commandLines.Count ? "" : _commandLines[index + 1];
                 }
             }
+        }
+
+        private void CopyMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+
+        }
+
+        private void SelectAll_Click(object sender, RoutedEventArgs e)
+        {
+        }
+
+        private void SelectNone_Click(object sender, RoutedEventArgs e)
+        {
         }
     }
 }

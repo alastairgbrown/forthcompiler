@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using static System.Linq.Enumerable;
 using static System.StringComparer;
 
 /*
@@ -80,7 +81,7 @@ namespace ForthCompiler
         [STAThread]
         private static void Main(string[] args)
         {
-            var argMap = Enumerable.Range(0, args.Length)
+            var argMap = Range(0, args.Length)
                              .Where(i => args[i].StartsWith("-"))
                              .ToDictionary(i => args[i], i => i + 1 < args.Length ? args[i + 1] : null, OrdinalIgnoreCase);
             var compiler = new Compiler();
@@ -110,7 +111,7 @@ namespace ForthCompiler
                             $"Line:  {line.Substring(0, pos.X)}<<>>{line.Substring(pos.X)}";
                     Console.WriteLine(error);
                     compiler.Tokens.SkipWhile(t => t != compiler.ArgToken).ForEach(t => t.TokenType = TokenType.Error);
-                    compiler.PostCompile();
+                    //compiler.PostCompile();
                 }
             }
 
@@ -145,6 +146,12 @@ namespace ForthCompiler
             compiler.Compile();
             compiler.Optimize(!argMap.ContainsKey("-nooptimize"));
             compiler.PostCompile();
+            ;
+
+            if (argMap.ContainsKey("-testcases"))
+            {
+                compiler.CoverageReport();
+            }
 
             if (argMap.ContainsKey("-mif"))
             {
@@ -173,7 +180,7 @@ namespace ForthCompiler
         Zeq,
         Lit,
         Label,
-        Address,
+        Address
     }
 
     public enum TokenType

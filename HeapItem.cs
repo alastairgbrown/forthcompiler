@@ -10,13 +10,13 @@ namespace ForthCompiler
 
         public bool WasChanged { get; set; }
 
-        public string AddressFormatted => Parent.Formatter(Address);
+        public string AddressFormatted => Parent.FormatNumber(Address);
 
-        public string Value => Parent.Formatter(Parent.Cpu.Heap.At(Address));
+        public string Value => Parent.FormatNumber(Parent.Cpu.Heap.At(Address));
 
         public Brush ValueForeground => IsChanged ? Brushes.Red : Brushes.Black;
 
-        public Brush NameForeground => TokenColors.At(TokenType.Variable) ?? Brushes.Magenta;
+        public Brush NameForeground => (SyntaxStyle.Tokens.At(TokenType.Variable) ?? SyntaxStyle.Default).Foreground;
 
         public bool IsChanged => Parent.Cpu.Heap.At(Address) != Parent.Cpu.LastHeap.At(Address);
 

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Drawing.Text;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -15,7 +16,7 @@ namespace ForthCompiler
         public List<Token> Tokens { get; set; } = new List<Token>();
         public int CodeIndex => Tokens.FirstOrDefault()?.CodeIndex ?? 0;
         public int CodeCount => (Tokens.LastOrDefault()?.CodeIndex - 
-                                 Tokens.FirstOrDefault()?.CodeIndex + Tokens.LastOrDefault()?.CodeCount ?? 0);
+                                 Tokens.FirstOrDefault()?.CodeIndex + Tokens.LastOrDefault()?.CodeCount) ?? 0;
 
         private int[] _originalCodeCounts;
 
@@ -47,8 +48,6 @@ namespace ForthCompiler
             }
         }
 
-        public bool IsTestCase => string.Join(null, Tokens.Take(4).Select(t => t.Text)).IsEqual("( TestCase ");
-
         public TextBlock Text
         {
             get
@@ -57,14 +56,19 @@ namespace ForthCompiler
 
                 foreach (var token in DisplayTokens)
                 {
-                    bool current = token.Contains(Parent.ProgramIndex);
+                    var current = token.Contains(Parent.ProgramIndex);
+                    var style = SyntaxStyle.Keywords.At(token.Text) ?? SyntaxStyle.Tokens.At(token.TokenType) ?? SyntaxStyle.Default;
+                    var ci = token.CodeIndex;
 
                     block.Inlines.Add(new Run
                     {
                         Text = token.Text,
-                        Foreground = TokenColors.At(token.TokenType) ?? KeywordColors.At(token.Text) ?? Brushes.Black,
-                        Background = current ? Brushes.LightGray : Brushes.Transparent,
-                        ToolTip = Parent.Formatter(token.CodeIndex) + " " + token.CodeCount
+                        Background = current ? Brushes.DarkGoldenrod : Brushes.Transparent,
+                        Foreground = current ? Brushes.Black : style.Foreground,
+                        FontWeight = style.FontWeight,
+                        FontStyle = style.FontStyle,
+                        TextDecorations = style?.TextDecoration,
+                        ToolTip = $"{Parent.FormatAddress(ci)} {token.CodeCount}"
                     });
 
                     for (var i = token.CodeIndex; Parent.ShowAsm.IsChecked && i < token.CodeIndex + token.CodeCount; i++)
@@ -78,10 +82,12 @@ namespace ForthCompiler
 
                         block.Inlines.Add(new Run
                         {
-                            Text = $" {codeslot.Code}{(codeslot.Code == Code.Lit ? " " + Parent.Formatter(codeslot.Value) : null)}",
+                            Text = $" {codeslot.Code}" +
+                                   $"{(codeslot.Code == Code.Lit || codeslot.Code == Code.Address || codeslot.Code == Code.Label ? " " + Parent.FormatNumber(codeslot.Value) : null)}" +
+                                   $"{codeslot.Label}",
+                            Background = current ? Brushes.DarkGoldenrod : Brushes.Transparent,
                             Foreground = current ? Brushes.Black : Brushes.DarkGray,
-                            Background = current ? Brushes.LightGray : Brushes.Transparent,
-                            ToolTip = Parent.Formatter(i)
+                            ToolTip = Parent.FormatAddress(i)
                         });
                     }
                 }
@@ -90,29 +96,25 @@ namespace ForthCompiler
             }
         }
 
-        public string Address => Parent.Formatter(Tokens.First().CodeIndex);
-
+        public string Address => $"{Parent.FormatAddress(CodeIndex)}";
         public Visibility ShowAddress => Parent.ShowAddress.IsChecked ? Visibility.Visible : Visibility.Collapsed;
-
-        public Brush Background => this.Contains(Parent.ProgramIndex)
-                                        ? Brushes.Yellow
-                                        : TestResult == null
-                                            ? Brushes.Transparent
-                                            : TestResult.StartsWith("PASS")
-                                                ? Brushes.LightGreen
-                                                : Brushes.LightPink;
-
+        public Visibility ShowPass => TestResult?.StartsWith("PASS") == true ? Visibility.Visible : Visibility.Collapsed;
+        public Visibility ShowFail => TestResult?.StartsWith("FAIL") == true ? Visibility.Visible : Visibility.Collapsed;
+        public bool IsTestCase => string.Join(null, Tokens.Take(4).Select(t => t.Text)).IsEqual("( TestCase ");
+        public Brush Background => this.Contains(Parent.ProgramIndex) ? Brushes.Yellow : Brushes.Transparent;
 
         public void Refresh()
         {
+            OnPropertyChanged(nameof(ShowAddress));
+            OnPropertyChanged(nameof(ShowPass));
+            OnPropertyChanged(nameof(ShowFail));
             OnPropertyChanged(nameof(Text));
             OnPropertyChanged(nameof(Background));
             OnPropertyChanged(nameof(Address));
-            OnPropertyChanged(nameof(ShowAddress));
             OnPropertyChanged(nameof(Tooltip));
+            OnPropertyChanged(nameof(TestResult));
         }
 
-        public string Tooltip => $"{TestResult} {Tokens.First().File}({Tokens.First().Y + 1})";
-
+        public string Tooltip => $"{Tokens.First().File}({Tokens.First().Y + 1})";
     }
 }

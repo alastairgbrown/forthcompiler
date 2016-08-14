@@ -4,9 +4,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using ForthCompiler.Annotations;
-using static System.StringComparison;
+using static System.Linq.Enumerable;
+using static System.Math;
+using static System.StringComparer;
 
 namespace ForthCompiler
 {
@@ -14,7 +18,7 @@ namespace ForthCompiler
     {
         public static bool IsEqual(this string a, string b)
         {
-            return string.Compare(a, b, OrdinalIgnoreCase) == 0;
+            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase) == 0;
         }
 
         public static void Sort<T>([NotNull]this ObservableCollection<T> collection, Comparison<T> comparison)
@@ -48,6 +52,39 @@ namespace ForthCompiler
         {
             TV value;
             return dict.TryGetValue(key, out value) ? value : default(TV);
+        }
+
+        public static IEnumerable<T> Skip<T>([NotNull]this IList<T> items, int count)
+        {
+            for (int i = count; i < items.Count; i++)
+            {
+                yield return items[i];
+            }
+        }
+
+        public static string ToText([NotNull] this IEnumerable<Token> tokens)
+        {
+            return string.Join(null, tokens.Select(t => t.Text)).Dequote();
+        }
+
+        public static Dictionary<string, List<Token>> ToDict(this IEnumerable<Token> text, params string[] keywords)
+        {
+            var dict = new Dictionary<string, List<Token>>(OrdinalIgnoreCase);
+            var keyword = keywords.First();
+
+            foreach (var token in text)
+            {
+                if (keywords.Any(k => k.IsEqual(token.Text)))
+                {
+                    dict[keyword = token.Text] = new List<Token>();
+                }
+                else
+                {
+                    dict[keyword].Add(token);
+                }
+            }
+
+            return dict;
         }
 
         public static void ForEach<T>([NotNull]this IEnumerable<T> items, Action<T> action)
@@ -91,10 +128,10 @@ namespace ForthCompiler
 
         public static string Dequote(this string text)
         {
-            return (text ?? string.Empty).Trim('"',' ','\t');
+            return text?.Trim('"', ' ', '\t', '\r', '\n') ?? string.Empty;
         }
 
-        public static T Validate<T>(this T obj, Func<T,string> message, Predicate<T> func = null)
+        public static T Validate<T>(this T obj, Func<T, string> message, Predicate<T> func = null)
         {
             if (!(func ?? (x => x != null))(obj))
             {
@@ -106,41 +143,42 @@ namespace ForthCompiler
 
         public static string LoadFileOrResource([NotNull]this string name)
         {
-            if (File.Exists(name))
+            var bytes = name.LoadBytes();
+
+            foreach (var enc in new[] { Encoding.UTF8 }
+                        .Where(e => e.GetPreamble().SequenceEqual(bytes.Take(e.GetPreamble().Length))))
             {
-                return File.ReadAllText(name);
+                return enc.GetString(bytes.Skip(enc.GetPreamble().Length).ToArray());
             }
 
-            var obj = Resource.ResourceManager.GetObject(Path.GetFileNameWithoutExtension(name));
-
-            if (obj is string)
-            {
-                return obj as string;
-            }
-
-            if (obj is byte[])
-            {
-                var bytes = obj as byte[];
-                foreach (var enc in new[] { Encoding.UTF8 }
-                          .Where(e => e.GetPreamble().SequenceEqual(bytes.Take(e.GetPreamble().Length))))
-                {
-                    return enc.GetString(bytes.Skip(enc.GetPreamble().Length).ToArray());
-                }
-
-                return Encoding.ASCII.GetString(bytes);
-            }
-
-            throw new Exception($"Can't load {name} resource");
+            return Encoding.ASCII.GetString(bytes);
         }
 
-        public static string[] SplitLines([NotNull] this string text)
+        public static byte[] LoadBytes([NotNull]this string name)
         {
-            return text.Split(new[] { "\r\n", "\r", "\n" }, 0);
+            if (File.Exists(name))
+            {
+                return File.ReadAllBytes(name);
+            }
+
+            var assembly = Assembly.GetExecutingAssembly();
+            var stream = assembly.GetManifestResourceStream($"{assembly.GetName().Name}.{name}");
+            var bytes = new byte[stream?.Length ?? 0];
+
+            stream?.Read(bytes, 0, bytes.Length);
+
+            return bytes;
         }
 
         public static void SetCount<T>([NotNull] this List<T> list, int count)
         {
-            list.RemoveRange(count, list.Count - count);
+            list.RemoveRange(count, Max(0, list.Count - count));
+            list.AddRange(Range(0, Max(0, count - list.Count)).Select(e => default(T)));
+        }
+
+        public static void Increment([NotNull] this Dictionary<string, int> dict, [CallerMemberName] string key = null)
+        {
+            dict[key] = dict.At(key) + 1;
         }
     }
 }

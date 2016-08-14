@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using static System.Linq.Enumerable;
 
 namespace ForthCompiler
 {
@@ -161,7 +162,7 @@ namespace ForthCompiler
 
                 if (_codeslots[lastSlot].Code == Code.Jsr && _definitions.ContainsKey(ProgramIndex))
                 {
-                    var next = Enumerable.Range(0, _codeslots.Count+1).Skip(_top * 8).First(cs => cs == _codeslots.Count || _codeslots[cs] != null);
+                    var next = Range(0, _codeslots.Count+1).Skip(_top * 8).First(cs => cs == _codeslots.Count || _codeslots[cs] != null);
                     CallStack.Peek().Value = next;
                     CallStack.Push(new Structure { Name = _definitions[ProgramIndex] });
                 }

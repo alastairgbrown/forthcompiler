@@ -12,7 +12,17 @@
             <StackPanel Orientation="Horizontal" Background="{Binding Background}" ToolTip="{Binding Tooltip}">
                 <CheckBox IsChecked="{Binding Break}" MinWidth="10"/>
                 <Label Content="{Binding Address}" MinWidth="50" Padding="0" Visibility="{Binding ShowAddress}"/>
+                <Label Visibility="{Binding ShowPass}" Padding="5,0" Content="a" FontFamily="Webdings" FontSize="16" FontWeight="Black" Foreground="Green" Background="LightGreen" ToolTip="{Binding TestResult}" HorizontalAlignment="Center" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"/>
+                <Label Visibility="{Binding ShowFail}" Padding="5,0" Content="r" FontFamily="Webdings" FontSize="16" FontWeight="Black" Foreground="Red" Background="LightPink" ToolTip="{Binding TestResult}" HorizontalAlignment="Center" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
                 <Label Content="{Binding Text}" MinWidth="1000" Padding="0"/>
+                <StackPanel.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Select All" Click="SelectAll_Click"></MenuItem>
+                        <MenuItem Header="Select None" Click="SelectNone_Click"></MenuItem>
+                        <MenuItem Header="Copy" Click="CopyMenuItem_Click"></MenuItem>
+                        <MenuItem Header="Set PC to this line" Click="SetPc_Click"></MenuItem>
+                    </ContextMenu>
+                </StackPanel.ContextMenu>
             </StackPanel>
         </DataTemplate>
         <DataTemplate x:Key="HeapItemTemplate" DataType="{x:Type local:HeapItem}">
@@ -41,7 +51,7 @@
     <Grid Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}" Margin="3">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="46" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="4" />
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="4"/>
@@ -91,7 +101,7 @@
         </Label>
         <Border Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
             <TextBlock FontFamily="Consolas">
-                <TextBlock x:Name="CpuStatus" FontFamily="Consolas">Cpu</TextBlock><Run FontFamily="Consolas" Text="&#13;&#10;"></Run><TextBlock x:Name="Status" FontFamily="Consolas">Status</TextBlock>
+                <TextBlock x:Name="CpuStatus" FontFamily="Consolas" TextWrapping="Wrap">Cpu</TextBlock><Run FontFamily="Consolas" Text="&#13;&#10;"></Run><TextBlock x:Name="Status" FontFamily="Consolas">Status</TextBlock>
             </TextBlock>
         </Border>
         <Border x:Name="CommandLineBorder" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Visibility="Collapsed" Padding="2" >

@@ -6,5 +6,6 @@ namespace ForthCompiler
         public string Close { get; set; }
         public string Suffix { get; set; }
         public int Value { get; set; }
+        public string Definition { get; set; }
     }
 }

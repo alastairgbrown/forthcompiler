@@ -1,100 +1,140 @@
-﻿TestCase VARIABLE TestVariable 1 TestVariable ! TestVariable @	Produces 1 		EndTestCase
-TestCase 2 CONSTANT TestConstant TestConstant 					Produces 2 		EndTestCase
-TestCase [ 2 20 + ] CONSTANT TestConstant22 TestConstant22		Produces 22 	EndTestCase
-TestCase 3 VALUE TestValue TestValue @							Produces 3 		EndTestCase
-TestCase $F $B -												Produces 4 		EndTestCase
-TestCase %101 													Produces 5 		EndTestCase
-TestCase #6 													Produces 6 		EndTestCase
-TestCase [ 2 3 * 1 + ] 											Produces 7 		EndTestCase
-TestCase : def dup + ; 											Produces 		EndTestCase
-TestCase 123 def 												Produces 246	EndTestCase
+﻿Macro "Region" EndMacro
+Macro "EndRegion" EndMacro
 
-\ return stack operations
-Macro _R1_    _RS_ @ EndMacro
-Macro _R2_    _RS_ @ 1 - EndMacro
-Macro _R3_    _RS_ @ 2 - EndMacro
-Macro _R4_    _RS_ @ 3 - EndMacro
-Macro _Take1_ _RS_ @ 1 + _RS_ ! _R1_ ! EndMacro
-Macro _Take2_ _RS_ @ 2 + _RS_ ! _R2_ ! _R1_ ! EndMacro
-Macro _Take3_ _RS_ @ 3 + _RS_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
-Macro _Take4_ _RS_ @ 4 + _RS_ ! _R4_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
-Macro _Drop1_ _RS_ @ 1 - _RS_ ! EndMacro
-Macro _Drop2_ _RS_ @ 2 - _RS_ ! EndMacro
-Macro _Drop3_ _RS_ @ 3 - _RS_ ! EndMacro
-Macro _Drop4_ _RS_ @ 4 - _RS_ ! EndMacro
+Region \ General test cases
 
-Macro ReturnStackCode
-	VARIABLE _RS_ 32 ALLOT _RS_ _RS_ ! 
-    EndMacro
-	Prerequisite ":" ReturnStackCode
-
-Macro LoopStackCode
-    VARIABLE _LOOP_RS_
-    EndMacro
+    TestCase Variable TestVariable 1 TestVariable ! TestVariable @  Produces 1      EndTestCase
+    TestCase 2 Constant TestConstant TestConstant                   Produces 2      EndTestCase
+    TestCase [ 2 20 + ] Constant TestConstant22 TestConstant22      Produces 22     EndTestCase
+    TestCase [ TestConstant22 10 * ]                                Produces 220    EndTestCase
+    TestCase 3 VALUE TestValue TestValue @                          Produces 3      EndTestCase
+    TestCase $0F $0B -                                              Produces 4      EndTestCase
+    TestCase %101                                                   Produces 5      EndTestCase
+    TestCase #6                                                     Produces 6      EndTestCase
+    TestCase [ 2 3 * 1 + ]                                          Produces 7      EndTestCase
+    TestCase [ 21 3 / 1 + ]                                         Produces 8      EndTestCase
+    TestCase : Def Dup + ;                                          				EndTestCase
+    TestCase 123 Def                                                Produces 246    EndTestCase
+	TestCase Include "IncludableFileForTestCases.4th"               				EndTestCase
+	TestCase IncludedConstant										Produces 24601  EndTestCase
 	
-Macro MultiplicationCode
-	: MulDefinition \ a b -- a*b
-		0 _Take3_ \ _R1_ is factor1, _R1_ is factor2, _R3_ is product
-		Begin _R1_ @ 0<> While
-			_R1_ @ 1 and 0<> _R2_ @ and _R3_ @ + _R3_ ! \ add to the product
-			_R2_ @ dup + _R2_ ! \ LSL factor2
-			_R1_ @ /lsr _R1_ ! \ LSR factor1
-		repeat
-		_R3_ @ _drop3_ 
-	;
+EndRegion
+
+Region \ memory operations
+
+    Macro @ /Ldw EndMacro
+
+    Macro ! /Stw /Pop EndMacro
+
+    Macro +! Dup -Rot @ + Swap ! EndMacro
+    TestCase Variable TestIncrement Produces  EndTestCase
+    TestCase 1 TestIncrement ! 1 TestIncrement +! TestIncrement @ Produces 2 EndTestCase
+    TestCase 5 TestIncrement ! 2 TestIncrement +! TestIncrement @ Produces 7 EndTestCase
+    
+EndRegion
+
+Region \ Definition operators
+    
+    Macro ":" IsDefinition
+        Struct Definition ";"
+        Addr Definition.Skip /Jnz 
+        Label {Label} 
+        _Take1_
+    EndMacro
+    Prerequisite ":" ReturnStackCode
+
+    Macro ";"
+        Label Definition.Exit 
+        _R1_ @ _Drop1_ /Jnz 
+        Label Definition.Skip
+        EndStruct Definition
     EndMacro
 
-Macro LShiftCode
-	: LShiftDefinition \ x y -- z
-		_Take1_
-		Begin _R1_ @ 0<> While dup + _R1_ @ 1 - _R1_ ! repeat 
-		_Drop1_
-	;
-	EndMacro
-	
-Macro RShiftCode
-	: RShiftDefinition \ x y -- z
-		_Take1_ 
-		Begin _R1_ @ 0<> While /LSR _R1_ @ 1 - _R1_ ! repeat 
-		_Drop1_
-	;
-	EndMacro
-
-Macro PickCode
-	: PickDefinition \  xu .. x0 u -- xu .. x0 xu
-		1 + dup _RS_ @ + _RS_ !  _Take1_ \ allocate xu+2 items on the return stack
-		_R1_ @ 0 Do \ suck the data stack into the return stack
-			_RS_ @ 4 - I - !
-		Loop
-		_R1_ @ 0 Do \ restore the data stack
-			_RS_ @ 3 - _R1_ @ - I + @
-		Loop
-		_RS_ @ _R1_ @ - @ \ get the item we want
-		_RS_ @ _R1_ @ - 1 - _RS_ ! \ restore the return stack
-	;
+    Macro "::" IsDefinition
+        Struct Definition ";;"
+        Addr Definition.Skip /Jnz 
+        Label {Label} 
     EndMacro
+
+    Macro ";;"
+        Label Definition.Exit /Jnz 
+        Label Definition.Skip
+        EndStruct Definition
+    EndMacro
+    
+    TestCase :: SimpleDefinition Swap Dup + Swap ;; 	EndTestCase
+    TestCase 50 SimpleDefinition 	Produces 100 		EndTestCase
+   
+EndRegion
+
+Region \ Return stack operations
+    Macro _R1_    _RS_ @ EndMacro
+    Macro _R2_    _RS_ @ 1 - EndMacro
+    Macro _R3_    _RS_ @ 2 - EndMacro
+    Macro _R4_    _RS_ @ 3 - EndMacro
+    Macro _R5_    _RS_ @ 4 - EndMacro
+    Macro _R6_    _RS_ @ 5 - EndMacro
+    Macro _Take1_ _RS_ @ 1 + _RS_ ! _R1_ ! EndMacro
+    Macro _Take2_ _RS_ @ 2 + _RS_ ! _R2_ ! _R1_ ! EndMacro
+    Macro _Take3_ _RS_ @ 3 + _RS_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
+    Macro _Take4_ _RS_ @ 4 + _RS_ ! _R4_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
+    Macro _Take5_ _RS_ @ 5 + _RS_ ! _R5_ ! _R4_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
+    Macro _Drop1_ _RS_ @ 1 - _RS_ ! EndMacro
+    Macro _Drop2_ _RS_ @ 2 - _RS_ ! EndMacro
+    Macro _Drop3_ _RS_ @ 3 - _RS_ ! EndMacro
+    Macro _Drop4_ _RS_ @ 4 - _RS_ ! EndMacro
+    Macro _Drop5_ _RS_ @ 5 - _RS_ ! EndMacro
+    Macro _Drop6_ _RS_ @ 6 - _RS_ ! EndMacro
+
+    Macro ReturnStackCode \ Prerequisite code for return stack operations
+        Variable _RS_ \ A pointer to the top of the return stack
+        32 Allot _RS_ _RS_ ! 
+    EndMacro
+
+    Macro LoopStackCode \ Prerequisite code for loops
+        Variable _RS_Loop_ \ A pointer to the current loop Variables for getting values for I And J
+    EndMacro
+
+	TestCase $4000 12 RShift Produces $4 EndTestCase
 	
-Optimization 0 * OptimizesTo dup xor EndOptimization
-Optimization 1 * OptimizesTo EndOptimization
-Optimization 2 * OptimizesTo dup + EndOptimization
-Optimization 3 * OptimizesTo dup dup + + EndOptimization
-Optimization 4 * OptimizesTo dup + dup + EndOptimization
-Optimization 0 0 OptimizesTo /psh /psh /xor /psh EndOptimization
-Optimization 0 OptimizesTo /psh /psh /xor EndOptimization
-Optimization /zeq /zeq /zeq OptimizesTo /zeq EndOptimization
-Optimization /zeq /zeq /zeq /zeq /zeq OptimizesTo /zeq EndOptimization
+    Optimization _Drop1_ _R1_ @ _Drop1_ OptimizesTo _R2_ @ _Drop2_ IsLastPass EndOptimization
+    Optimization _Drop2_ _R1_ @ _Drop1_ OptimizesTo _R3_ @ _Drop3_ IsLastPass EndOptimization
+    Optimization _Drop3_ _R1_ @ _Drop1_ OptimizesTo _R4_ @ _Drop4_ IsLastPass EndOptimization
+    Optimization _Drop4_ _R1_ @ _Drop1_ OptimizesTo _R5_ @ _Drop5_ IsLastPass EndOptimization
+    Optimization _Drop5_ _R1_ @ _Drop1_ OptimizesTo _R6_ @ _Drop6_ IsLastPass EndOptimization
+	
+EndRegion
 
-Macro + /Add EndMacro
-    TestCase 1 1 + Produces 2 EndTestCase
+Region \ Math operators
 
-Macro - /Sub EndMacro
-    TestCase 1 1 - Produces 0 EndTestCase
-    TestCase 0 1 - Produces -1 EndTestCase
-    TestCase 4 2 - Produces 2 EndTestCase
+    Macro + ( x y -- x+y ) /Add EndMacro
+        TestCase 1 1 + Produces 2 EndTestCase
 
-Macro * MulDefinition EndMacro
+    Macro - ( x y -- x-y ) /Sub EndMacro
+        TestCase 1 1 - Produces 0 EndTestCase
+        TestCase 0 1 - Produces -1 EndTestCase
+        TestCase 4 2 - Produces 2 EndTestCase
+
+    Macro MulCode \ Prerequisite code for *
+        : * \ a b -- a*b
+            0 _Take3_ \ _R1_ is factor1, _R1_ is factor2, _R3_ is product
+            Begin _R1_ @ 0<> While
+                _R1_ @ 1 And 0<> _R2_ @ And _R3_ @ + _R3_ ! \ Add to the product
+                _R2_ @ 1 LShift _R2_ ! \ LSL factor2
+                _R1_ @ 1 RShift _R1_ ! \ Lsr factor1
+            Repeat
+            _R3_ @ _Drop3_ 
+        ;
+    EndMacro
     Prerequisite * ReturnStackCode
-	Prerequisite * MultiplicationCode
+    Prerequisite * RShiftCode
+    Prerequisite * LShiftCode
+    Prerequisite * MulCode
+    Optimization 0 * OptimizesTo Dup Xor EndOptimization
+    Optimization 1 * OptimizesTo EndOptimization
+    Optimization 2 * OptimizesTo Dup + EndOptimization
+    Optimization 3 * OptimizesTo Dup Dup + + EndOptimization
+    Optimization 4 * OptimizesTo Dup + Dup + EndOptimization
     TestCase 2 5 * Produces 10 EndTestCase
     TestCase 10 100 * Produces 1000 EndTestCase
     TestCase 10 0 * Produces 0 EndTestCase
@@ -103,311 +143,435 @@ Macro * MulDefinition EndMacro
     TestCase 10 3 * Produces 30 EndTestCase
     TestCase 10 4 * Produces 40 EndTestCase
 
-Macro / NotImplementedException EndMacro
-Macro . NotImplementedException EndMacro
+    Macro DivModCode \ Prerequisite code for / And Mod
+        : DivMod \ a b -- a/b a%b
+            Dup 1 0 _Take5_ \ _R1_ is a, _R2_ is b, _R5_ _R1_ is result
+            Begin _R3_ @ _R1_ @ < While
+                _R3_ @ 1 LShift _R3_ !
+                _R4_ @ 1 LShift _R4_ !
+            Repeat
+            Begin _R1_ @ _R2_ @ >= While
+                _R3_ @ _R1_ @ <= If
+                    _R5_ @ _R4_ @ + _R5_ !
+                    _R1_ @ _R3_ @ - _R1_ !
+                Then
+                _R3_ @ 1 RShift _R3_ !
+                _R4_ @ 1 RShift _R4_ !
+            Repeat
+            _R5_ @ _R1_ @
+            _Drop5_ 
+        ;
+        : /
+            Dup 0= If Nip Else DivMod Drop Then
+        ;
+        : Mod
+            Dup 0<> If DivMod Then Nip 
+        ;
+    EndMacro
+    
+    Prerequisite / ReturnStackCode
+    Prerequisite / RShiftCode
+    Prerequisite / LShiftCode
+    Prerequisite / DivModCode
+    Optimization 2 / OptimizesTo /Lsr EndOptimization
+    Optimization 4 / OptimizesTo /Lsr /Lsr EndOptimization
+    Optimization 8 / OptimizesTo /Lsr /Lsr /Lsr EndOptimization
+    Optimization 16 / OptimizesTo /Lsr /Lsr /Lsr /Lsr EndOptimization
+    TestCase 15 0 / Produces 0 EndTestCase
+    TestCase 15 3 / Produces 5 EndTestCase
+    TestCase 100 3 / Produces 33 EndTestCase
+    TestCase 100 55 / Produces 1 EndTestCase
+    TestCase 10 2 / Produces 5 EndTestCase
+    TestCase 100 4 / Produces 25 EndTestCase
+    TestCase 1000 8 / Produces 125 EndTestCase
+    TestCase 10000 16 / Produces 625 EndTestCase
 
-Macro = /Sub /Zeq EndMacro
+    Prerequisite Mod ReturnStackCode
+    Prerequisite Mod RShiftCode
+    Prerequisite Mod LShiftCode
+    Prerequisite Mod DivModCode
+    Optimization 2 Mod OptimizesTo 1 /And EndOptimization
+    Optimization 4 Mod OptimizesTo 3 /And EndOptimization
+    Optimization 8 Mod OptimizesTo 7 /And EndOptimization
+    Optimization 16 Mod OptimizesTo 15 /And EndOptimization
+    TestCase 15 0 Mod Produces 0 EndTestCase
+    TestCase 15 3 Mod Produces 0 EndTestCase
+    TestCase 100 3 Mod Produces 1 EndTestCase
+    TestCase 100 55 Mod Produces 45 EndTestCase
+    TestCase $55 2 Mod Produces 1 EndTestCase
+    TestCase $55 4 Mod Produces 1 EndTestCase
+    TestCase $55 8 Mod Produces 5 EndTestCase
+    TestCase $55 16 Mod Produces 5 EndTestCase
+        
+    Macro = /Sub /Zeq EndMacro
     TestCase 1 1 = Produces -1 EndTestCase
     TestCase 1 0 = Produces 0 EndTestCase
 
-Macro <> /Sub /Zeq /Zeq EndMacro
+    Macro <> /Sub /Zeq /Zeq EndMacro
     TestCase 1 1 <> Produces 0 EndTestCase
     TestCase 1 0 <> Produces -1 EndTestCase
 
-Macro 0= /Zeq EndMacro
+    Macro 0= /Zeq EndMacro
     TestCase 0 0= Produces -1 EndTestCase
     TestCase 1 0= Produces 0 EndTestCase
 
-Macro 0<> /Zeq /Zeq EndMacro
+    Macro 0<> /Zeq /Zeq EndMacro
     TestCase 0 0<> Produces 0 EndTestCase
     TestCase 1 0<> Produces -1 EndTestCase
 
-Macro _IsNegative /psh /add /psh /xor /psh /adc EndMacro
-	TestCase -2 _IsNegative Produces 1 EndTestCase
-	TestCase -1 _IsNegative Produces 1 EndTestCase
-	TestCase 0 _IsNegative Produces 0 EndTestCase
-	TestCase 1 _IsNegative Produces 0 EndTestCase
-	TestCase 2 _IsNegative Produces 0 EndTestCase
+    Macro 0>= /Psh /Add /Psh /Xor /Psh /Adc /Zeq EndMacro
+    TestCase -2 0>= Produces 0 EndTestCase
+    TestCase -1 0>= Produces 0 EndTestCase
+    TestCase 0 0>= Produces -1 EndTestCase
+    TestCase 1 0>= Produces -1 EndTestCase
+    TestCase 2 0>= Produces -1 EndTestCase
 
-Macro < - _IsNegative 0<> EndMacro
+    Macro < - 0>= 0= EndMacro
     TestCase 0 1 < Produces -1 EndTestCase
     TestCase 1 0 < Produces 0 EndTestCase
     TestCase 1 1 < Produces 0 EndTestCase
 
-Macro > swap - _IsNegative 0<> EndMacro
+    Macro > Swap - 0>= 0= EndMacro
     TestCase 0 1 > Produces 0 EndTestCase
     TestCase 1 0 > Produces -1 EndTestCase
     TestCase 1 1 > Produces 0 EndTestCase
 
-Macro <= swap - _IsNegative 0= EndMacro
+    Macro <= Swap - 0>= EndMacro
     TestCase 0 1 <= Produces -1 EndTestCase
     TestCase 1 0 <= Produces 0 EndTestCase
     TestCase 1 1 <= Produces -1 EndTestCase
 
-Macro >= - _IsNegative 0= EndMacro
+    Macro >= - 0>= EndMacro
     TestCase 0 1 >= Produces 0 EndTestCase
     TestCase 1 0 >= Produces -1 EndTestCase
     TestCase 1 1 >= Produces -1 EndTestCase
 
-Macro and /And EndMacro
-    TestCase 127 192 and Produces 64 EndTestCase
+    Macro And /And EndMacro
+    TestCase %00011111 %11111000 And Produces %00011000 EndTestCase
 
-Macro xor /Xor EndMacro
-    TestCase 127 192 xor Produces 191 EndTestCase
+    Macro Xor /Xor EndMacro
+    TestCase %00011111 %11111000 Xor Produces %11100111 EndTestCase
 
-Macro or -1 xor swap -1 xor and -1 xor EndMacro
-    TestCase 127 192 or Produces 255 EndTestCase
+    Macro Or Invert Swap Invert And Invert EndMacro
+    TestCase %00011111 %11111000 Or Produces %11111111 EndTestCase
 
-Macro invert -1 xor EndMacro
-    TestCase -1 invert Produces 0 EndTestCase
-    TestCase  0 invert Produces -1 EndTestCase
+    Macro Invert -1 Xor EndMacro
+    TestCase -1 Invert Produces 0 EndTestCase
+    TestCase  0 Invert Produces -1 EndTestCase
 
-Macro mod NotImplementedException EndMacro
+    Macro Negate 0 Swap - EndMacro
+    TestCase 0 Negate Produces 0 EndTestCase
+    TestCase -1 Negate Produces 1 EndTestCase
+    TestCase 1 Negate Produces -1 EndTestCase
 
-Macro negate 0 swap - EndMacro
-    TestCase 0 NEGATE Produces 0 EndTestCase
-    TestCase -1 NEGATE Produces 1 EndTestCase
-    TestCase 1 NEGATE Produces -1 EndTestCase
+    Macro Abs Dup 0>= 0= If Negate Then EndMacro
+    TestCase -1 Abs Produces 1 EndTestCase
+    TestCase 1 Abs Produces 1 EndTestCase
 
-Macro abs Dup 0 < If Negate Then EndMacro
-    TestCase -1 ABS Produces 1 EndTestCase
-    TestCase 1 ABS Produces 1 EndTestCase
+    Macro Min 2Dup > If Swap Then Drop EndMacro
+    Prerequisite Min ReturnStackCode
+    TestCase 0 1 Min Produces 0 EndTestCase
+    TestCase 1 0 Min Produces 0 EndTestCase
 
-Macro min 2dup > If Swap Then drop EndMacro
-    TestCase 0 1 MIN Produces 0 EndTestCase
-    TestCase 1 0 MIN Produces 0 EndTestCase
-    Prerequisite min ReturnStackCode
+    Macro Max 2Dup < If Swap Then Drop EndMacro
+    Prerequisite Max ReturnStackCode
+    TestCase 0 1 Max Produces 1 EndTestCase
+    TestCase 1 0 Max Produces 1 EndTestCase
 
-Macro max 2Dup < If Swap Then drop EndMacro
-    TestCase 0 1 MAX Produces 1 EndTestCase
-    TestCase 1 0 MAX Produces 1 EndTestCase
-    Prerequisite max ReturnStackCode
-
-Macro LShift LShiftDefinition EndMacro
-    TestCase 16 4 lshift Produces 256 EndTestCase
+    Macro LShiftCode \ Prerequisite code for LShift
+        : LShift \ x y -- z
+            _Take1_
+            Begin _R1_ @ 0<> While 
+                Dup + _R1_ @ 1 - _R1_ ! 
+            Repeat 
+            _Drop1_
+        ;
+    EndMacro
     Prerequisite LShift ReturnStackCode
-	Prerequisite LShift LShiftCode
-	Optimization 0 lshift OptimizesTo EndOptimization
-	Optimization 1 lshift OptimizesTo dup +  EndOptimization
-	Optimization 2 lshift OptimizesTo dup + dup + EndOptimization
-	Optimization 3 lshift OptimizesTo dup + dup + dup + EndOptimization
-	Optimization 4 lshift OptimizesTo dup + dup + dup + dup + EndOptimization
+    Prerequisite LShift LShiftCode
+    Optimization 0 LShift OptimizesTo EndOptimization
+    Optimization 1 LShift OptimizesTo Dup +  EndOptimization
+    Optimization 2 LShift OptimizesTo Dup + Dup + EndOptimization
+    Optimization 3 LShift OptimizesTo Dup + Dup + Dup + EndOptimization
+    Optimization 4 LShift OptimizesTo Dup + Dup + Dup + Dup + EndOptimization
+    TestCase 16 0 LShift Produces 16 EndTestCase
+    TestCase 16 1 LShift Produces 32 EndTestCase
+    TestCase 16 2 LShift Produces 64 EndTestCase
+    TestCase 16 3 LShift Produces 128 EndTestCase
+    TestCase 16 4 LShift Produces 256 EndTestCase
+    TestCase 16 12 LShift Produces 65536 EndTestCase
 
-Macro RShift RShiftDefinition EndMacro
-    TestCase 16 4 rshift Produces 1 EndTestCase
+    Macro RShiftCode \ Prerequisite code for RShift
+        : RShift \ x y -- z
+            _Take1_ 
+            Begin _R1_ @ 0<> While 
+                /Lsr _R1_ @ 1 - _R1_ ! 
+            Repeat 
+            _Drop1_
+        ;
+    EndMacro
     Prerequisite RShift ReturnStackCode
-	Prerequisite RShift RShiftCode
-	Optimization 0 RShift OptimizesTo EndOptimization
-	Optimization 1 RShift OptimizesTo /lsr  EndOptimization
-	Optimization 2 RShift OptimizesTo /lsr /lsr EndOptimization
-	Optimization 3 RShift OptimizesTo /lsr /lsr /lsr EndOptimization
-	Optimization 4 RShift OptimizesTo /lsr /lsr /lsr /lsr EndOptimization
+    Prerequisite RShift RShiftCode
+    Optimization 0 RShift OptimizesTo EndOptimization
+    Optimization 1 RShift OptimizesTo /Lsr  EndOptimization
+    Optimization 2 RShift OptimizesTo /Lsr /Lsr EndOptimization
+    Optimization 3 RShift OptimizesTo /Lsr /Lsr /Lsr EndOptimization
+    Optimization 4 RShift OptimizesTo /Lsr /Lsr /Lsr /Lsr EndOptimization
+    TestCase 16 0 RShift Produces 16 EndTestCase
+    TestCase 16 1 RShift Produces 8 EndTestCase
+    TestCase 16 2 RShift Produces 4 EndTestCase
+    TestCase 16 3 RShift Produces 2 EndTestCase
+    TestCase 16 4 RShift Produces 1 EndTestCase
 
-Macro dup /Psh EndMacro
-    TestCase 1 DUP Produces 1 1 EndTestCase
+    Optimization 0 0 OptimizesTo /Psh /Psh /Xor /Psh IsLastPass EndOptimization
+    Optimization 0 OptimizesTo /Psh /Psh /Xor IsLastPass EndOptimization
+    Optimization -1 OptimizesTo /Psh /Psh /Xor /Zeq IsLastPass EndOptimization
+    Optimization /Zeq /Zeq /Zeq OptimizesTo /Zeq IsLastPass EndOptimization
 
-Macro ?DUP DUP DUP 0= If DROP THEN EndMacro
-    TestCase 1 ?DUP Produces 1 1 EndTestCase
-    TestCase 0 ?DUP Produces 0 EndTestCase
+EndRegion
 
-Macro DROP /Pop EndMacro
-    TestCase 1 2 DROP Produces 1 EndTestCase
+Region \ stack operations
+    
+    Macro Dup /Psh EndMacro
+    TestCase 1 Dup Produces 1 1 EndTestCase
 
-Macro SWAP /Swp EndMacro
-    TestCase 0 1 SWAP Produces "1 0" EndTestCase
+    Macro ?Dup Dup Dup 0= If Drop Then EndMacro
+    TestCase 1 ?Dup Produces 1 1 EndTestCase
+    TestCase 0 ?Dup Produces 0 EndTestCase
 
-Macro OVER _Take2_ _R1_ @ _R2_ @ _R1_ @ _drop2_ EndMacro
-    TestCase 1 2 OVER Produces 1 2 1 EndTestCase
+    Macro Drop ( a -- - ) /Pop EndMacro
+    TestCase 1 2 Drop Produces 1 EndTestCase
+
+    Macro Swap ( a b -- b a ) /Swp EndMacro
+    TestCase 0 1 Swap Produces 1 0 EndTestCase
+
+    Macro Over ( a b -- a b a ) _Take2_ _R1_ @ _R2_ @ _R1_ @ _Drop2_ EndMacro
+    TestCase 1 2 Over Produces 1 2 1 EndTestCase
     Prerequisite Over ReturnStackCode
 
-Macro NIP /Swp /Pop EndMacro
-    TestCase 1 2 NIP Produces 2 EndTestCase
+    Macro Nip ( a b -- b ) /Swp /Pop EndMacro
+    TestCase 1 2 Nip Produces 2 EndTestCase
 
-Macro TUCK swap over EndMacro
-    TestCase 1 2 TUCK Produces 2 1 2 EndTestCase
+    Macro Tuck ( a b -- b a b ) Swap Over EndMacro
+    TestCase 1 2 Tuck Produces 2 1 2 EndTestCase
 
-Macro ROT _Take3_ _R2_ @ _R3_ @ _R1_ @ _drop3_ EndMacro
-    TestCase 1 2 3 ROT Produces 2 3 1 EndTestCase
+    Macro Rot ( a b c -- b c a ) _Take3_ _R2_ @ _R3_ @ _R1_ @ _Drop3_ EndMacro
+    TestCase 1 2 3 Rot Produces 2 3 1 EndTestCase
+    Prerequisite Rot ReturnStackCode
 
-Macro -ROT _Take3_ _R3_ @ _R1_ @ _R2_ @ _drop3_ EndMacro
-    TestCase 1 2 3 -ROT Produces 3 1 2 EndTestCase
+    Macro -Rot ( a b c -- c a b ) _Take3_ _R3_ @ _R1_ @ _R2_ @ _Drop3_ EndMacro
+    TestCase 1 2 3 -Rot Produces 3 1 2 EndTestCase
+    Prerequisite -Rot ReturnStackCode
 
-Macro PICK PickDefinition EndMacro
-    TestCase 11 22 33 44 0 PICK Produces 11 22 33 44 44 EndTestCase
-    TestCase 11 22 33 44 3 PICK Produces 11 22 33 44 11 EndTestCase
-    Prerequisite pick ReturnStackCode
-    Prerequisite pick LoopStackCode
-    Prerequisite pick PickCode
-
-Macro 2DUP _Take2_ _R1_ @ _R2_ @ _R1_ @ _R2_ @ _drop2_ EndMacro
-    TestCase 1 2 2DUP Produces 1 2 1 2 EndTestCase
-    Prerequisite 2dup ReturnStackCode
-
-Macro 2DROP /Pop /Pop EndMacro
-    TestCase 1 2 3 4 2DROP Produces 1 2 EndTestCase
-
-Macro 2SWAP _Take4_ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _drop4_ EndMacro
-    TestCase 1 2 3 4 2SWAP Produces 3 4 1 2 EndTestCase
-    Prerequisite 2DROP ReturnStackCode
-
-Macro 2OVER _Take4_ _R1_ @ _R2_ @ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _drop4_ EndMacro
-    TestCase 1 2 3 4 2OVER Produces 1 2 3 4 1 2 EndTestCase
-    Prerequisite 2OVER ReturnStackCode
-
-Macro @ /Ldw EndMacro
-
-Macro ! /Stw /Pop EndMacro
-
-Macro +! dup -rot @ + swap ! EndMacro
-    TestCase Variable Test_+! Produces  EndTestCase
-    TestCase 1 Test_+! ! 1 Test_+! +! Test_+! @ Produces 2 EndTestCase
-    TestCase 5 Test_+! ! 2 Test_+! +! Test_+! @ Produces 7 EndTestCase
-
-Macro "If"
-    Struct If Then
-    0= ADDR If.END and /jnz
+    Macro PickCode \ Prerequisite code for Pick
+        : Pick \  xu .. x0 u -- xu .. x0 xu
+            1 + Dup _RS_ @ + _RS_ !  _Take1_ \ allocate xu+2 items on the return stack
+            _R1_ @ 0 Do \ suck the data stack into the return stack
+                _RS_ @ 4 - I - !
+            Loop
+            _R1_ @ 0 Do \ restore the data stack
+                _RS_ @ 3 - _R1_ @ - I + @
+            Loop
+            _RS_ @ _R1_ @ - @ \ get the item we want
+            _RS_ @ _R1_ @ - 1 - _RS_ ! \ restore the return stack
+        ;
     EndMacro
-    TestCase 1 If 88 then Produces 88 EndTestCase
-    TestCase 0 If 88 then Produces  EndTestCase
-    TestCase 1 If 88 else 99 then Produces 88 EndTestCase
-    TestCase 0 If 88 else 99 then Produces 99 EndTestCase
+    Prerequisite Pick ReturnStackCode
+    Prerequisite Pick LoopStackCode
+    Prerequisite Pick PickCode
+    TestCase 11 22 33 44 0 Pick Produces 11 22 33 44 44 EndTestCase
+    TestCase 11 22 33 44 3 Pick Produces 11 22 33 44 11 EndTestCase
 
-Macro "Else"
-    ADDR If.ENDELSE /jnz LABEL If.END
+    Macro 2Dup _Take2_ _R1_ @ _R2_ @ _R1_ @ _R2_ @ _Drop2_ EndMacro
+    TestCase 1 2 2Dup Produces 1 2 1 2 EndTestCase
+    Prerequisite 2Dup ReturnStackCode
+
+    Macro 2Drop /Pop /Pop EndMacro
+    TestCase 1 2 3 4 2Drop Produces 1 2 EndTestCase
+
+    Macro 2Swap _Take4_ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _Drop4_ EndMacro
+    TestCase 1 2 3 4 2Swap Produces 3 4 1 2 EndTestCase
+    Prerequisite 2Drop ReturnStackCode
+
+    Macro 2Over _Take4_ _R1_ @ _R2_ @ _R3_ @ _R4_ @ _R1_ @ _R2_ @ _Drop4_ EndMacro
+    TestCase 1 2 3 4 2Over Produces 1 2 3 4 1 2 EndTestCase
+    Prerequisite 2Over ReturnStackCode
+    
+EndRegion
+
+Region \ Language Constructs
+
+    Macro "If"
+        Struct If Then
+        0= Addr If.End And /Jnz
+    EndMacro
+    TestCase 1 If 88 Then Produces 88 EndTestCase
+    TestCase 0 If 88 Then Produces EndTestCase
+    TestCase 1 If 88 Else 99 Then Produces 88 EndTestCase
+    TestCase 0 If 88 Else 99 Then Produces 99 EndTestCase
+
+    Macro "Else"
+        Addr If.EndElse /Jnz 
+        Label If.End
     EndMacro
 
-Macro "Then"
-    LABEL If.ENDELSE LABEL If.END 
-	EndStruct "If"
+    Macro "Then"
+        Label If.EndElse 
+        Label If.End 
+        EndStruct "If"
     EndMacro
 
-Macro "Exit"
-    ADDR Definition.EXIT @ code /jnz
+    Macro "Exit"
+        Addr Definition.Exit /Jnz
     EndMacro
+    TestCase : ExitTest 11 Exit 22 ; Produces EndTestCase
+    TestCase ExitTest Produces 11 EndTestCase
 
-Macro "Do"
-    Struct Do Loop
-    _LOOP_RS_ @ _Take3_ _RS_ @ _LOOP_RS_ !
-    LABEL Do.START
-    _R2_ @ _R1_ @ >= ADDR Do.END and /jnz
+    Macro "Do"
+        Struct Do Loop
+        _RS_Loop_ @ _Take3_ 
+        _RS_ @ _RS_Loop_ !
+        Label Do.Start
+        _R2_ @ _R1_ @ >= Addr Do.End And /Jnz
     EndMacro
     Prerequisite "Do" ReturnStackCode
     Prerequisite "Do" LoopStackCode
     TestCase 5 0 Do I Loop Produces 0 1 2 3 4 EndTestCase
     TestCase 5 1 Do I Loop Produces 1 2 3 4 EndTestCase
 
-Macro "Loop"
-    1 _R2_ @ + _R2_ ! 
-	ADDR Do.START /jnz
-    LABEL Do.END _R3_ @ _LOOP_RS_ ! _drop3_ 
-    EndStruct "Do"
+    Macro "Loop"
+        1 _R2_ @ + _R2_ ! 
+        Addr Do.Start /Jnz
+        Label Do.End _R3_ @ _RS_Loop_ ! 
+        _Drop3_ 
+        EndStruct "Do"
     EndMacro
 
-Macro "+Loop"
-    _R2_ @ + _R2_ ! 
-	ADDR Do.START /jnz 
-    LABEL Do.END _R3_ @ _LOOP_RS_ ! _drop3_ 
-    EndStruct "Do"
+    Macro "+Loop"
+        _R2_ @ + _R2_ ! 
+        Addr Do.Start /Jnz 
+        Label Do.End _R3_ @ _RS_Loop_ ! 
+        _Drop3_ 
+        EndStruct "Do"
     EndMacro
     TestCase 5 0 Do I 2 +Loop Produces 0 2 4 EndTestCase
 
-Macro unloop
-    _drop3_ 
+    Macro Unloop
+        _Drop3_ 
+    EndMacro
+    TestCase : UnloopTest 5 0 Do I I 3 = If Unloop Exit Then Loop ; 		EndTestCase
+    TestCase UnloopTest Produces 0 1 2 3 									EndTestCase
+
+    Macro I 
+        _RS_Loop_ @ 1 - @
     EndMacro
 
-Macro I 
-    _LOOP_RS_ @ 1 - @
+    Macro J 
+        _RS_Loop_ @ 2 - @ 1 - @
+    EndMacro
+    TestCase 12 10 Do 22 20 Do J I Loop Loop Produces 10 20 10 21 11 20 11 21 EndTestCase
+
+    Macro Leave 
+        Addr Do.End /Jnz
+    EndMacro
+	TestCase 5 0 Do I I 3 = If Leave Then Loop Produces 0 1 2 3 			EndTestCase
+
+    Macro "Begin"
+        Struct "Begin" "Again/Until/Repeat"
+        Label Begin.Start
+    EndMacro
+    TestCase 5 Begin Dup 0<> While Dup 1 - Repeat   Produces 5 4 3 2 1 0	EndTestCase
+    TestCase 5 Begin Dup 1 - Dup 0= Until           Produces 5 4 3 2 1 0	EndTestCase
+
+    Macro "Again"
+        Addr Begin.Start /Jnz 
+        EndStruct "Begin"
+    EndMacro
+    TestCase : AgainTest 5 Begin Dup 1 - Dup 0= If Exit Then Again ;   		EndTestCase
+    TestCase AgainTest           					Produces 5 4 3 2 1 0	EndTestCase
+
+    Macro "Until"
+        0= Addr Begin.Start And /Jnz 
+        EndStruct "Begin"
     EndMacro
 
-Macro J 
-    _LOOP_RS_ @ 2 - @ 1 - @
-    EndMacro
-    TestCase 2 0 Do 12 10 Do J I Loop Loop Produces 0 10 0 11 1 10 1 11 EndTestCase
-
-Macro Leave 
-    ADDR Do.END /jnz
+    Macro "While"
+        Struct "While" "Repeat"
+        0= Addr While.End And /Jnz
     EndMacro
 
-Macro "Begin"
-    Struct "Begin" "Again/Until/Repeat"
-    LABEL Begin.Start
-    EndMacro
-    TestCase 5 Begin dup 0<> While dup 1 - repeat Produces 5 4 3 2 1 0 EndTestCase
-    TestCase 5 Begin dup 1 - dup 0= until Produces 5 4 3 2 1 0 EndTestCase
-
-Macro "Again"
-    ADDR Begin.Start /jnz 
-	EndStruct "Begin"
+    Macro "Repeat" 
+        Addr Begin.Start /Jnz Label While.End 
+        EndStruct "While"
+        EndStruct "Begin"
     EndMacro
 
-Macro "Until"
-    0= ADDR Begin.Start and /jnz 
-	EndStruct "Begin"
+    Macro "Case" 
+        Struct Case EndCase
+        _Take1_
     EndMacro
-
-Macro "While"
-    Struct "While" "Repeat"
-    0= ADDR While.End and /jnz
-    EndMacro
-
-Macro "Repeat" 
-    ADDR Begin.Start /jnz LABEL While.End 
-	EndStruct "While"
-	EndStruct "Begin"
-    EndMacro
-
-Macro "Case" 
-    Struct Case EndCase
-    _Take1_
-    EndMacro
+    
     Prerequisite "Case" ReturnStackCode
-    TestCase 0 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces  EndTestCase
-    TestCase 1 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces 10 EndTestCase
-    TestCase 2 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces 20 20 EndTestCase
+    TestCase 0 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces  		EndTestCase
+    TestCase 1 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces 10 		EndTestCase
+    TestCase 2 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces 20 20 	EndTestCase
 
-Macro "Of" 
-    Struct Of EndOf
-    _R1_ @ <> ADDR Of.END and /jnz
+    Macro "Of" 
+        Struct Of EndOf
+        _R1_ @ <> Addr Of.End And /Jnz
     EndMacro
 
-Macro "EndOf"
-    ADDR Case.END /jnz LABEL Of.END 
-	EndStruct "Of"
+    Macro "EndOf"
+        Addr Case.End /Jnz Label Of.End 
+        EndStruct "Of"
     EndMacro
 
-Macro "EndCase"
-    LABEL Case.END _drop1_ 
-	EndStruct "Case"
+    Macro "EndCase"
+        Label Case.End _Drop1_ 
+        EndStruct "Case"
     EndMacro
 
-\ These document and test the various exceptions
+EndRegion
 
-TestCase "" 							ProducesException "No code produced" EndTestCase
-TestCase 1 1 * 							ProducesException "" EndTestCase	
-TestCase "(" 							ProducesException "missing )" EndTestCase
-TestCase ")" 							ProducesException ") is not defined" EndTestCase
-TestCase "if again"						ProducesException "Missing Begin" EndTestCase
-TestCase "if" 							ProducesException "Missing Then" EndTestCase
-TestCase "if else" 						ProducesException "Missing Then" EndTestCase
-TestCase "then" 						ProducesException "Missing If" EndTestCase
-TestCase "else" 						ProducesException "Missing If" EndTestCase
-TestCase "begin" 						ProducesException "Missing Again/Until/Repeat" EndTestCase
-TestCase "begin while"					ProducesException "Missing Repeat" EndTestCase
-TestCase addr LabelName 
-		 label LabelName 				ProducesException "Missing LabelName" EndTestCase
-TestCase addr Global.LabelName 
-		 label Global.LabelName 		ProducesException "" EndTestCase
-TestCase addr Global.LabelName			ProducesException "Missing Label Global.LabelName" EndTestCase
-TestCase constant 						ProducesException "constant expects 1 arguments" EndTestCase
-TestCase constant name 					ProducesException "missing code to evaluate" EndTestCase
-TestCase [ 1 2 ] constant name 			ProducesException "constant expects 1 preceding value" EndTestCase
-TestCase [ 1 2 ] allot 					ProducesException "allot expects 1 preceding value" EndTestCase
-TestCase * WithCore prerequisite * y 	ProducesException "y is not defined as a Macro" EndTestCase
-TestCase macro y endmacro : y ; 		ProducesException "y is already defined as a Macro" EndTestCase
-TestCase : y ; macro y endmacro 		ProducesException "y is already defined as a Definition" EndTestCase
-TestCase variable y macro y endmacro	ProducesException "y is already defined as a Variable" EndTestCase
-TestCase NotImplementedException 		ProducesException "The method or operation is not implemented." EndTestCase
-TestCase / 								ProducesException "The method or operation is not implemented." EndTestCase
-TestCase y 								ProducesException "y is not defined" EndTestCase
-TestCase ] 								ProducesException "Missing [" EndTestCase
-TestCase [ 								ProducesException "Missing ]" EndTestCase
+Region \ Exception test cases
+
+    TestCase                                        ProducesException "No code produced"                         EndTestCase
+    TestCase 1 1 *                                  ProducesException ""                                         EndTestCase
+    TestCase "("                                    ProducesException "missing )"                                EndTestCase
+    TestCase ")"                                    ProducesException ") is not defined"                         EndTestCase
+    TestCase "If Again"                             ProducesException "Missing Begin"                            EndTestCase
+    TestCase "If"                                   ProducesException "Missing Then"                             EndTestCase
+    TestCase "If Else"                              ProducesException "Missing Then"                             EndTestCase
+    TestCase "Then"                                 ProducesException "Missing If"                               EndTestCase
+    TestCase "Else"                                 ProducesException "Missing If"                               EndTestCase
+    TestCase "Begin"                                ProducesException "Missing Again/Until/Repeat"               EndTestCase
+    TestCase "Begin While"                          ProducesException "Missing Repeat"                           EndTestCase
+    TestCase Addr Name          Label Name          ProducesException "Missing Name"                             EndTestCase
+    TestCase Addr Global.Name   Label Global.Name   ProducesException ""                                         EndTestCase
+    TestCase Addr Global.Name                       ProducesException "Missing Label Global.Name"                EndTestCase
+    TestCase Constant                               ProducesException "Constant expects 1 arguments"             EndTestCase
+    TestCase Constant Name                          ProducesException "missing code to evaluate"                 EndTestCase
+    TestCase [ 1 2 ] Constant Name                  ProducesException "Constant expects 1 preceding value"       EndTestCase
+    TestCase [ 1 2 ] Allot                          ProducesException "Allot expects 1 preceding value"          EndTestCase
+    TestCase yy WithCore prerequisite yy y          ProducesException "y is not defined as a Macro"              EndTestCase
+    TestCase Macro y EndMacro : y ;                 ProducesException "y is already defined as a Macro"          EndTestCase
+    TestCase : y ; Macro y EndMacro                 ProducesException "y is already defined as a Definition"     EndTestCase
+    TestCase Variable y Macro y EndMacro            ProducesException "y is already defined as a Variable"       EndTestCase
+    TestCase y                                      ProducesException "y is not defined"                         EndTestCase
+    TestCase ]                                      ProducesException "Missing ["                                EndTestCase
+    TestCase [                                      ProducesException "Missing ]"                                EndTestCase
+
+EndRegion
+
+Region \ Optimization test cases
+
+    TestCase [ 1 2 3 Rot ]                          ProducesCode 2 3 1                                           EndTestCase
+    TestCase [ 6 7 * ]                              ProducesCode 42                                              EndTestCase
+    TestCase 0                                      ProducesCode /Psh /Psh /Xor                                  EndTestCase
+    TestCase 5 3 *                                  ProducesCode 5 Dup Dup + +                                   EndTestCase
+    TestCase 5 3 LShift                             ProducesCode 5 Dup + Dup + Dup +                             EndTestCase
+	TestCase 1 addr Global.b /jnz 2 label Global.b 3 ProducesCode 1 addr Global.b /jnz label Global.b 3          EndTestCase
+	TestCase : TestOpt2 _Take2_ _R1_ @ 2 * _R2_ @ 3 * + _Drop2_ ; 												 EndTestCase
+	TestCase : TestOpt4 _Take4_ _R1_ @ 2 * _R2_ @ 3 * + _Drop4_ ; 												 EndTestCase
+	TestCase 1 1 TestOpt2 1 1 1 1 TestOpt4 			Produces 5 5													 EndTestCase
+EndRegion

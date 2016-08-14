@@ -6,7 +6,7 @@ namespace ForthCompiler
     {
         public Structure Item { get; set; }
         public string Name => Item.Name.Split('.').Skip(1).First();
-        public string AddressFormatted => Parent.Formatter(Item.Value);
+        public string AddressFormatted => Parent.FormatNumber(Item.Value);
 
         public void Refresh()
         {
