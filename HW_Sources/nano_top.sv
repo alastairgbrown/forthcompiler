@@ -2,7 +2,7 @@ module nano_top
 (
    input    logic                clock,
    input    logic                sreset,
-   output   logic                led
+   output   wire                 led
 );
 
             localparam           SYS_CLOCK = 50000000;
@@ -37,7 +37,7 @@ module nano_top
             localparam           LED_END_ADDR = LED_BASE + ((1 << LED_ADDRBITS) - 1);
             
    ///////////////////////////////////////////////////////////////////////////
-            localparam           TIMER1_ENABLE = 0;
+            localparam           TIMER1_ENABLE = 1;
             localparam           TIMER1_BASE = LED_END_ADDR + 1;
             localparam           TIMER1_SIZE = 8;
             localparam           TIMER1_ADDRBITS = $clog2(TIMER1_SIZE);
@@ -66,22 +66,21 @@ module nano_top
       if (UART1_ENABLE != 0) $display("UART_BASE=0x%h", UART1_BASE);
       $display("===========================================");
    end 
- 
 
- 
    ///////////////////////////////////////////////////////////////////////////
             logic [WIDTHA-1:0]   core_address;
-            logic [31:0]         core_writedata, core_readdata;
-            logic                core_read, core_write, core_waitrequest;
+            logic [15:0]         core_writedata, core_readdata;
+            logic [1:0]          core_byteenable;
+            logic                core_read, core_write, core_waitrequest, core_irq;
             wire                 cs_code = (core_address >= (CODE_BASE)) && (core_address < (CODE_BASE + CODE_SIZE)) && (CODE_ENABLE == 1);
             wire                 cs_ram = (core_address >= (RAM_BASE)) && (core_address < (RAM_BASE + RAM_SIZE)) && (RAM_ENABLE == 1);
             wire                 cs_irq = (core_address >= (IRQ_BASE)) && (core_address < (IRQ_BASE + IRQ_SIZE));
             wire                 cs_led = (core_address >= (LED_BASE)) && (core_address < (LED_BASE + LED_SIZE)) && (LED_ENABLE == 1);
             wire                 cs_timer1 = (core_address >= (TIMER1_BASE)) && (core_address < (TIMER1_BASE + TIMER1_SIZE)) && (TIMER1_ENABLE == 1);
             wire                 cs_uart1 = (core_address >= (UART1_BASE)) && (core_address < (UART1_BASE + UART1_SIZE)) && (UART1_ENABLE == 1);
-   nano2                         # (
+   nano5                         # (
                                     .WIDTHA(WIDTHA),
-                                    .WIDTHD(32)
+                                    .WIDTHD(16)
                                  )
                                  core (
                                     .clock(clock),
@@ -89,26 +88,28 @@ module nano_top
                                     .address(core_address),
                                     .writedata(core_writedata),
                                     .readdata(core_readdata),
+                                    .byteenable(core_byteenable),
                                     .read(core_read),
                                     .write(core_write),
-                                    .waitrequest(core_waitrequest)
+                                    .waitrequest(core_waitrequest),
+                                    .irq(core_irq)
                                  );
                                  
    ///////////////////////////////////////////////////////////////////////////
-            logic [31:0]         code_readdata;
+            logic [15:0]         code_readdata;
             logic                code_waitrequest;
    generate
       if (CODE_ENABLE != 0) begin : code
    ram                           # (
                                     .WIDTHA(CODE_ADDRBITS),
-                                    .WIDTHD(32),
+                                    .WIDTHD(16),
                                     .FILE("code.hex")
                                  )
                                  mem_code (
                                     .clock(clock),
                                     .sreset(sreset),
                                     .address(core_address[CODE_ADDRBITS-1:0]),
-                                    .writedata({32{1'bx}}),
+                                    .writedata({16{1'bx}}),
                                     .readdata(code_readdata),
                                     .read(cs_code & core_read),
                                     .write(1'b0),
@@ -118,13 +119,13 @@ module nano_top
    endgenerate
                                  
    ///////////////////////////////////////////////////////////////////////////
-            logic [31:0]         ram_readdata;
+            logic [15:0]         ram_readdata;
             logic                ram_waitrequest;
    generate
       if (RAM_ENABLE != 0) begin : ram
-   ram                           # (
+   ram                         # (
                                     .WIDTHA(RAM_ADDRBITS),
-                                    .WIDTHD(32),
+                                    .WIDTHD(16),
                                     .FILE("")
                                  )
                                  mem_ram (
@@ -133,6 +134,7 @@ module nano_top
                                     .address(core_address[RAM_ADDRBITS-1:0]),
                                     .writedata(core_writedata),
                                     .readdata(ram_readdata),
+                                    //.byteenable(core_byteenable),
                                     .read(cs_ram & core_read),
                                     .write(cs_ram & core_write),
                                     .waitrequest(ram_waitrequest)
@@ -141,7 +143,7 @@ module nano_top
    endgenerate
 
    ///////////////////////////////////////////////////////////////////////////
-            logic [31:0]         led_readdata;
+            logic [15:0]         led_readdata;
             logic                led_waitrequest;
    generate
       if (LED_ENABLE != 0) begin : pio
@@ -165,7 +167,7 @@ module nano_top
    endgenerate
 
    ///////////////////////////////////////////////////////////////////////////
-            logic [31:0]         timer1_readdata;
+            logic [15:0]         timer1_readdata;
             logic                timer1_waitrequest, timer1_irq;
    generate
       if (TIMER1_ENABLE != 0) begin : timer1
@@ -187,7 +189,7 @@ module nano_top
    endgenerate
 
    ///////////////////////////////////////////////////////////////////////////
-            logic [31:0]         uart1_readdata;
+            logic [15:0]         uart1_readdata;
             logic                uart1_waitrequest, uart1_irq;
    generate
       if (UART1_ENABLE != 0) begin
@@ -218,7 +220,8 @@ module nano_top
    always_comb begin
       core_readdata = code_readdata;
       core_waitrequest = 1'b0;
-      core_readdata = {32{1'bx}};
+      core_readdata = {16{1'bx}};
+      core_irq = (TIMER1_ENABLE != 0) & timer1_irq;
       if (cs_code) begin
          core_readdata = code_readdata;
          core_waitrequest = code_waitrequest;
@@ -227,11 +230,18 @@ module nano_top
          core_readdata = ram_readdata;
          core_waitrequest = ram_waitrequest;
       end
+      if (cs_irq) begin
+         core_readdata = {timer1_irq};
+         core_waitrequest = 1'b0;
+      end
       if (cs_led) begin
          core_readdata = led_readdata;
          core_waitrequest = led_waitrequest;
       end
+      if (cs_timer1) begin
+         core_readdata = timer1_readdata;
+         core_waitrequest = timer1_waitrequest;
+      end
    end
    
 endmodule
-
