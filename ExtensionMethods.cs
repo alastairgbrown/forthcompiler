@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Security.RightsManagement;
 using System.Text;
 using ForthCompiler.Annotations;
 using static System.Linq.Enumerable;
@@ -66,6 +67,15 @@ namespace ForthCompiler
         {
             return string.Join(null, tokens.Select(t => t.Text)).Dequote();
         }
+
+        public static string ToDoc(this IEnumerable<Token> tokens)
+        {
+            return string.Join(null,
+                tokens.SkipWhile(t => !t.IsDocumentation)
+                      .TakeWhile(t => t.IsExcluded)
+                      .Select(t => t.Text)).Trim('(', ')', '\\', ' ', '\t', '\r', '\n');
+        }
+
 
         public static Dictionary<string, List<Token>> ToDict(this IEnumerable<Token> text, params string[] keywords)
         {
@@ -141,7 +151,7 @@ namespace ForthCompiler
             return obj;
         }
 
-        public static string LoadFileOrResource([NotNull]this string name)
+        public static string LoadText([NotNull]this string name)
         {
             var bytes = name.LoadBytes();
 
@@ -179,6 +189,43 @@ namespace ForthCompiler
         public static void Increment([NotNull] this Dictionary<string, int> dict, [CallerMemberName] string key = null)
         {
             dict[key] = dict.At(key) + 1;
+        }
+
+        public static int ToAddressAndSlot(this int value)
+        {
+            return (value / 6) * 8 + (value % 6);
+        }
+
+        public static int ToCodeIndex(this int value)
+        {
+            return (value / 8) * 6 + (value % 8);
+        }
+
+        public static IEnumerable<CodeSlot> ToPfx(this int value, int? length = null)
+        {
+            var twosComp = unchecked((uint)value);
+            var codes = Range(0, 8).Select(i => (twosComp >> ((7 - i) * 4)) & 0xF).ToArray();
+            var msbit = Range(1, 31).Reverse().FirstOrDefault(i => ((twosComp >> i) & 1) != (value < 0 ? 1 : 0));
+            var needed = length ?? ((msbit + 5) / 4);
+
+            return codes.Skip(codes.Length - needed).Select(c => (CodeSlot)(Code)((int)Code._0 + c));
+        }
+
+        public static void Replace([NotNull] this List<CodeSlot> list, int index, int remove, CodeSlot[] add)
+        {
+            int common = Min(remove, add.Length);
+            remove = Max(remove - add.Length, 0);
+
+            for (int x = 0; x < common; x++)
+            {
+                list[index + x].Code = add[x].Code;
+                list[index + x].Value = add[x].Value;
+                list[index + x].Label = add[x].Label;
+            }
+
+            list.RemoveRange(index + common, remove);
+            list.InsertRange(index + common, add.Skip(common));
+
         }
     }
 }

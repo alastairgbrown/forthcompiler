@@ -18,6 +18,7 @@ namespace ForthCompiler
         private int _top;
         private int _next;
         private int _carry;
+        private bool _loadingPfx;
         private string _error;
         public object[] LastState { get; private set; }
         private readonly List<CodeSlot> _codeslots;
@@ -56,8 +57,6 @@ namespace ForthCompiler
 
             switch (code.Code)
             {
-                case Code._:
-                    break;
                 case Code.Ldw:
                     _top = Heap.At(_top);
                     break;
@@ -80,14 +79,14 @@ namespace ForthCompiler
                 case Code.Jnz:
                     if (_top != 0)
                     {
-                        ProgramIndex = _top * 8;
+                        ProgramIndex = _top.ToCodeIndex();
                     }
                     _top = _next;
                     _next = Stack.Pop();
                     break;
                 case Code.Jsr:
-                    var temp = (ProgramIndex + 7) / 8;
-                    ProgramIndex = _top * 8;
+                    var temp = ProgramIndex.ToAddressAndSlot();
+                    ProgramIndex = _top.ToCodeIndex();
                     _top = temp;
                     break;
                 case Code.Add:
@@ -116,6 +115,14 @@ namespace ForthCompiler
                     _top ^= _next;
                     _next = Stack.Pop();
                     break;
+                case Code.Ior:
+                    _top |= _next;
+                    _next = Stack.Pop();
+                    break;
+                case Code.Mlt:
+                    _top *= _next;
+                    _next = Stack.Pop();
+                    break;
                 case Code.Lsr:
                     _carry = _top & 1;
                     _top = _top >> 1;
@@ -123,12 +130,16 @@ namespace ForthCompiler
                 case Code.Zeq:
                     _top = _top == 0 ? -1 : 0;
                     break;
-                case Code.Lit:
-                    Stack.Push(_next);
-                    _next = _top;
-                    _top = code.Value;
+                default:
+                    if (!_loadingPfx)
+                    {
+                        _top = (int)code.Code >= (int)Code._8 ? -1 : 0;
+                    }
+                    _top = (_top << 4) | (int)code.Code;
                     break;
             }
+
+            _loadingPfx = (int)code.Code <= (int)Code._F;
 
             while (ProgramIndex >= 0 && ProgramIndex < _codeslots.Count && _codeslots[ProgramIndex] == null)
             {
@@ -162,8 +173,7 @@ namespace ForthCompiler
 
                 if (_codeslots[lastSlot].Code == Code.Jsr && _definitions.ContainsKey(ProgramIndex))
                 {
-                    var next = Range(0, _codeslots.Count+1).Skip(_top * 8).First(cs => cs == _codeslots.Count || _codeslots[cs] != null);
-                    CallStack.Peek().Value = next;
+                    CallStack.Peek().Value = _top.ToCodeIndex();
                     CallStack.Push(new Structure { Name = _definitions[ProgramIndex] });
                 }
                 else if (CallStack.Count >= 2 && ProgramIndex == CallStack.Skip(1).First().Value)

@@ -26,7 +26,7 @@ namespace ForthCompiler
         {
             try
             {
-                var xml = XDocument.Parse("ForthColoring.xml".LoadFileOrResource());
+                var xml = XDocument.Parse("ForthColoring.xml".LoadText());
                 var styles = xml.XPathSelectElements("//WordsStyle").ToDictionary(
                         x => x.Attribute("name").Value,
                         x => new SyntaxStyle

@@ -27,7 +27,7 @@ Region \ memory operations
     Macro ! /Stw /Pop EndMacro
 
     Macro +! Dup -Rot @ + Swap ! EndMacro
-    TestCase Variable TestIncrement Produces  EndTestCase
+    TestCase Variable TestIncrement EndTestCase
     TestCase 1 TestIncrement ! 1 TestIncrement +! TestIncrement @ Produces 2 EndTestCase
     TestCase 5 TestIncrement ! 2 TestIncrement +! TestIncrement @ Produces 7 EndTestCase
     
@@ -35,7 +35,7 @@ EndRegion
 
 Region \ Definition operators
     
-    Macro ":" IsDefinition
+    Macro ":" IsDefinition \ Start Standard defintion
         Struct Definition ";"
         Addr Definition.Skip /Jnz 
         Label {Label} 
@@ -43,20 +43,20 @@ Region \ Definition operators
     EndMacro
     Prerequisite ":" ReturnStackCode
 
-    Macro ";"
+    Macro ";" \ End Standard defintion
         Label Definition.Exit 
         _R1_ @ _Drop1_ /Jnz 
         Label Definition.Skip
         EndStruct Definition
     EndMacro
 
-    Macro "::" IsDefinition
+    Macro "::" IsDefinition \ Start Simplified defintion
         Struct Definition ";;"
         Addr Definition.Skip /Jnz 
         Label {Label} 
     EndMacro
 
-    Macro ";;"
+    Macro ";;" \ End Simplified defintion
         Label Definition.Exit /Jnz 
         Label Definition.Skip
         EndStruct Definition
@@ -92,45 +92,34 @@ Region \ Return stack operations
     EndMacro
 
     Macro LoopStackCode \ Prerequisite code for loops
-        Variable _RS_Loop_ \ A pointer to the current loop Variables for getting values for I And J
+        Variable _RS_Loop_ \ A pointer to the current loop variables for getting values for I And J
     EndMacro
 
     TestCase $4000 12 RShift Produces $4 EndTestCase
     
+    Optimization _Take1_ _R1_ @ OptimizesTo dup _Take1_ IsLastPass EndOptimization
     Optimization _Drop1_ _R1_ @ _Drop1_ OptimizesTo _R2_ @ _Drop2_ IsLastPass EndOptimization
     Optimization _Drop2_ _R1_ @ _Drop1_ OptimizesTo _R3_ @ _Drop3_ IsLastPass EndOptimization
     Optimization _Drop3_ _R1_ @ _Drop1_ OptimizesTo _R4_ @ _Drop4_ IsLastPass EndOptimization
     Optimization _Drop4_ _R1_ @ _Drop1_ OptimizesTo _R5_ @ _Drop5_ IsLastPass EndOptimization
     Optimization _Drop5_ _R1_ @ _Drop1_ OptimizesTo _R6_ @ _Drop6_ IsLastPass EndOptimization
+    Optimization _R1_ @ Drop OptimizesTo  EndOptimization
     
 EndRegion
 
 Region \ Math operators
 
     Macro + ( x y -- x+y ) /Add EndMacro
-        TestCase 1 1 + Produces 2 EndTestCase
+    TestCase 1 1 + Produces 2 EndTestCase
 
     Macro - ( x y -- x-y ) /Sub EndMacro
-        TestCase 1 1 - Produces 0 EndTestCase
-        TestCase 0 1 - Produces -1 EndTestCase
-        TestCase 4 2 - Produces 2 EndTestCase
+    TestCase 1 1 - Produces 0 EndTestCase
+    TestCase 0 1 - Produces -1 EndTestCase
+    TestCase 4 2 - Produces 2 EndTestCase
+        
+    Macro * /Mlt EndMacro
 
-    Macro MulCode \ Prerequisite code for *
-        : * \ a b -- a*b
-            0 _Take3_ \ _R1_ is factor1, _R1_ is factor2, _R3_ is product
-            Begin _R1_ @ 0<> While
-                _R1_ @ 1 And 0<> _R2_ @ And _R3_ @ + _R3_ ! \ Add to the product
-                _R2_ @ 1 LShift _R2_ ! \ LSL factor2
-                _R1_ @ 1 RShift _R1_ ! \ Lsr factor1
-            Repeat
-            _R3_ @ _Drop3_ 
-        ;
-    EndMacro
-    Prerequisite * ReturnStackCode
-    Prerequisite * RShiftCode
-    Prerequisite * LShiftCode
-    Prerequisite * MulCode
-    Optimization 0 * OptimizesTo Dup Xor EndOptimization
+    Optimization 0 * OptimizesTo Drop 0 EndOptimization
     Optimization 1 * OptimizesTo EndOptimization
     Optimization 2 * OptimizesTo Dup + EndOptimization
     Optimization 3 * OptimizesTo Dup Dup + + EndOptimization
@@ -143,7 +132,7 @@ Region \ Math operators
     TestCase 10 3 * Produces 30 EndTestCase
     TestCase 10 4 * Produces 40 EndTestCase
 
-    Macro DivModCode \ Prerequisite code for / And Mod
+    Macro DivModCode \ Prerequisite code for / and Mod
         : DivMod \ a b -- a/b a%b
             Dup 1 0 _Take5_ \ _R1_ is a, _R2_ is b, _R5_ _R1_ is result
             Begin _R3_ @ _R1_ @ < While
@@ -252,7 +241,7 @@ Region \ Math operators
     Macro Xor /Xor EndMacro
     TestCase %00011111 %11111000 Xor Produces %11100111 EndTestCase
 
-    Macro Or Invert Swap Invert And Invert EndMacro
+    Macro Or /Ior EndMacro
     TestCase %00011111 %11111000 Or Produces %11111111 EndTestCase
 
     Macro Invert -1 Xor EndMacro
@@ -277,6 +266,20 @@ Region \ Math operators
     Prerequisite Max ReturnStackCode
     TestCase 0 1 Max Produces 1 EndTestCase
     TestCase 1 0 Max Produces 1 EndTestCase
+    
+    Macro Within _Take3_ _R1_ @ dup _R2_ @ >= Swap _R3_ @ < And _Drop3_ EndMacro
+    TestCase 0 1 3 Within Produces 0 EndTestCase
+    TestCase 1 1 3 Within Produces -1 EndTestCase
+    TestCase 2 1 3 Within Produces -1 EndTestCase
+    TestCase 3 1 3 Within Produces 0 EndTestCase
+    TestCase 4 1 3 Within Produces 0 EndTestCase
+
+    Macro Within? _Take3_ _R1_ @ dup _R2_ @ >= Swap _R3_ @ <= And _Drop3_ EndMacro
+    TestCase 0 1 3 Within? Produces 0 EndTestCase
+    TestCase 1 1 3 Within? Produces -1 EndTestCase
+    TestCase 2 1 3 Within? Produces -1 EndTestCase
+    TestCase 3 1 3 Within? Produces -1 EndTestCase
+    TestCase 4 1 3 Within? Produces 0 EndTestCase
 
     Macro LShiftCode \ Prerequisite code for LShift
         : LShift \ x y -- z
@@ -323,9 +326,6 @@ Region \ Math operators
     TestCase 16 3 RShift Produces 2 EndTestCase
     TestCase 16 4 RShift Produces 1 EndTestCase
 
-    Optimization 0 0 OptimizesTo /Psh /Psh /Xor /Psh IsLastPass EndOptimization
-    Optimization 0 OptimizesTo /Psh /Psh /Xor IsLastPass EndOptimization
-    Optimization -1 OptimizesTo /Psh /Psh /Xor /Zeq IsLastPass EndOptimization
     Optimization /Zeq /Zeq /Zeq OptimizesTo /Zeq IsLastPass EndOptimization
 
 EndRegion
@@ -424,7 +424,7 @@ Region \ Language Constructs
     Macro "Exit"
         Addr Definition.Exit /Jnz
     EndMacro
-    TestCase : ExitTest 11 Exit 22 ; Produces EndTestCase
+    TestCase : ExitTest 11 Exit 22 ; EndTestCase
     TestCase ExitTest Produces 11 EndTestCase
 
     Macro "Do"
@@ -507,30 +507,42 @@ Region \ Language Constructs
     EndMacro
 
     Macro "Case" 
-        Struct Case EndCase
+        Struct "Case" "EndCase"
         _Take1_
+        _R1_ @
     EndMacro
-    
     Prerequisite "Case" ReturnStackCode
-    TestCase 0 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces         EndTestCase
-    TestCase 1 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces 10      EndTestCase
-    TestCase 2 Case 1 Of 10 EndOf 2 Of 20 20 EndOf EndCase Produces 20 20   EndTestCase
 
     Macro "Of" 
-        Struct Of EndOf
-        _R1_ @ <> Addr Of.End And /Jnz
+        Struct "Of" "EndOf"
+        <> Addr Of.End And /Jnz
     EndMacro
 
+    Macro "Of?" 
+        Struct "Of" "EndOf"
+        Nip 0= Addr Of.End And /Jnz
+    EndMacro
+    
     Macro "EndOf"
         Addr Case.End /Jnz Label Of.End 
         EndStruct "Of"
+        _R1_ @ 
     EndMacro
 
     Macro "EndCase"
+        drop
         Label Case.End _Drop1_ 
         EndStruct "Case"
     EndMacro
 
+    TestCase 0 Case 1 Of 10 EndOf 2 Of 20 20 EndOf Dup 3 4 Within? Of? 34 EndOf Dup EndCase Produces 0      EndTestCase
+    TestCase 1 Case 1 Of 10 EndOf 2 Of 20 20 EndOf Dup 3 4 Within? Of? 34 EndOf Dup EndCase Produces 10     EndTestCase
+    TestCase 2 Case 1 Of 10 EndOf 2 Of 20 20 EndOf Dup 3 4 Within? Of? 34 EndOf Dup EndCase Produces 20 20  EndTestCase
+    TestCase 3 Case 1 Of 10 EndOf 2 Of 20 20 EndOf Dup 3 4 Within? Of? 34 EndOf Dup EndCase Produces 34     EndTestCase
+    TestCase 4 Case 1 Of 10 EndOf 2 Of 20 20 EndOf Dup 3 4 Within? Of? 34 EndOf Dup EndCase Produces 34     EndTestCase
+    TestCase 5 Case 1 Of 10 EndOf 2 Of 20 20 EndOf Dup 3 4 Within? Of? 34 EndOf Dup EndCase Produces 5      EndTestCase
+    TestCase 6 Case                                                                 EndCase Produces        EndTestCase
+    
 EndRegion
 
 Region \ Exception test cases
@@ -546,6 +558,7 @@ Region \ Exception test cases
     TestCase "Else"                                 ProducesException "Missing If"                               EndTestCase
     TestCase "Begin"                                ProducesException "Missing Again/Until/Repeat"               EndTestCase
     TestCase "Begin While"                          ProducesException "Missing Repeat"                           EndTestCase
+    TestCase "Exit"                                 ProducesException "Missing Definition"                       EndTestCase
     TestCase Addr Name          Label Name          ProducesException "Missing Name"                             EndTestCase
     TestCase Addr Global.Name   Label Global.Name   ProducesException ""                                         EndTestCase
     TestCase Addr Global.Name                       ProducesException "Missing Label Global.Name"                EndTestCase
@@ -565,13 +578,23 @@ EndRegion
 
 Region \ Optimization test cases
 
-    TestCase [ 1 2 3 Rot ]                          ProducesCode 2 3 1                                           EndTestCase
-    TestCase [ 6 7 * ]                              ProducesCode 42                                              EndTestCase
-    TestCase 0                                      ProducesCode /Psh /Psh /Xor                                  EndTestCase
-    TestCase 5 3 *                                  ProducesCode 5 Dup Dup + +                                   EndTestCase
-    TestCase 5 3 LShift                             ProducesCode 5 Dup + Dup + Dup +                             EndTestCase
-    TestCase 1 addr Global.b /jnz 2 label Global.b 3 ProducesCode 1 addr Global.b /jnz label Global.b 3          EndTestCase
-    TestCase : TestOpt2 _Take2_ _R1_ @ 2 * _R2_ @ 3 * + _Drop2_ ;                                                EndTestCase
-    TestCase : TestOpt4 _Take4_ _R1_ @ 2 * _R2_ @ 3 * + _Drop4_ ;                                                EndTestCase
-    TestCase 1 1 TestOpt2 1 1 1 1 TestOpt4          Produces 5 5                                                 EndTestCase
+    TestCase 1 7 8 -1                                   ProducesCode /Psh /_1 /Psh /_7 /Psh /_0 /_8 /Psh /_F  ( Make sure lits are properly compressed          ) EndTestCase
+    TestCase [ 1 2 3 Rot ]                              ProducesCode 2 3 1                                    ( Make sure ReturnStackCode is optimized out      ) EndTestCase
+    TestCase [ 6 7 * ]                                  ProducesCode 42                                       ( Make sure MulCode is optimized out              ) EndTestCase
+    TestCase 5 3 *                                      ProducesCode 5 Dup Dup + +                            ( Make sure 3 * is optimized                      ) EndTestCase
+    TestCase 5 3 LShift                                 ProducesCode 5 Dup + Dup + Dup +                      ( Make sure 3 LShift is optimized                 ) EndTestCase
+    TestCase 1 addr Global.b /jnz 2 label Global.b 3    ProducesCode 1 addr Global.b /jnz label Global.b 3    ( Make sure jump Optimization works               ) EndTestCase
+    TestCase : ExitTest 11 Exit 22 ; ExitTest           ProducesCode : ExitTest 11 Exit ; ExitTest            ( Make sure unreachable code Optimization works   ) EndTestCase
+    TestCase : TestOptimize2 _Take2_ _R1_ @ 2 * _R2_ @ 3 * + _Drop2_ ;                                        (                                                 ) EndTestCase
+    TestCase : TestOptimize3 _Take3_ _R1_ @ 2 * _R2_ @ 3 * + _Drop3_ ;                                        (                                                 ) EndTestCase
+    TestCase : TestOptimize4 _Take4_ _R1_ @ 2 * _R2_ @ 3 * + _Drop4_ ;                                        (                                                 ) EndTestCase
+    TestCase 1 1 TestOptimize2  1 1 1 TestOptimize3 1 1 1 1 TestOptimize4   Produces 5 5 5                    (                                                 ) EndTestCase
+
+EndRegion
+
+Region \ Optimization test cases
+
+    TestCase 0 ProducesMif "0000 : 00000012;" EndTestCase
+    TestCase 1 ProducesMif "0000 : 00000032;" EndTestCase
+    
 EndRegion

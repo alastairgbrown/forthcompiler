@@ -14,6 +14,7 @@ namespace ForthCompiler
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Variable;
+            compiler.Encode(Code.Psh);
             compiler.Encode(HeapAddress);
         }
     }
@@ -23,6 +24,7 @@ namespace ForthCompiler
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Constant;
+            compiler.Encode(Code.Psh);
             compiler.Encode(Value);
         }
 
@@ -64,11 +66,16 @@ namespace ForthCompiler
 
         public Dictionary<bool,List<string>> Prereqs { get; set; }
 
+        private static bool IsDefinition(Token token)
+        {
+            return !token.IsExcluded && token.Text.IsEqual("IsDefinition");
+        }
+
         public void Process(Compiler compiler)
         {
             Definition definition = null;
 
-            if (Tokens.Any(t => t.Text.IsEqual("IsDefinition")))
+            if (Tokens.Any(IsDefinition))
             {
                 compiler.ParseWhiteSpace();
                 compiler.Token.TokenType = TokenType.Definition;
@@ -80,7 +87,7 @@ namespace ForthCompiler
 
             compiler.Tokens.InsertRange(
                 compiler.TokenIndex + 1,
-                Tokens.Where(t => !t.Text.IsEqual("IsDefinition")).Select(t =>
+                Tokens.Where(t => !IsDefinition(t)).Select(t =>
                     token.Clone(t.Text.Replace("{Label}", definition?.Label ?? "{Label}"), token.MacroLevel + 1, t.TokenType)));
         }
     }
@@ -93,7 +100,5 @@ namespace ForthCompiler
         {
             compiler.Encode(Code);
         }
-
     }
-
 }

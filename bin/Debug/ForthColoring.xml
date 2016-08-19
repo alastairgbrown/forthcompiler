@@ -16,19 +16,19 @@
             <Keywords name="Operators1">+ - * @ ! &lt; &gt; &lt;= &gt;= = &lt;&gt;</Keywords>
             <Keywords name="Operators2"></Keywords>
             <Keywords name="Folders in code1, open">MACRO TESTCASE Optimization Region</Keywords>
-            <Keywords name="Folders in code1, middle">ProducesException ProducesCode Produces WithCore OptimizesTo IsDefinition</Keywords>
+            <Keywords name="Folders in code1, middle">ProducesException ProducesCode ProducesMif Produces WithCore OptimizesTo IsDefinition</Keywords>
             <Keywords name="Folders in code1, close">ENDMACRO ENDTESTCASE EndOptimization EndRegion</Keywords>
             <Keywords name="Folders in code2, open">:</Keywords>
             <Keywords name="Folders in code2, middle"></Keywords>
             <Keywords name="Folders in code2, close">;</Keywords>
-            <Keywords name="Folders in comment, open">IF BEGIN DO CASE OF</Keywords>
+            <Keywords name="Folders in comment, open">If Begin Do CAse Of Of?</Keywords>
             <Keywords name="Folders in comment, middle">While Else</Keywords>
-            <Keywords name="Folders in comment, close">THEN UNTIL REPEAT LOOP +LOOP ENDCASE ENDOF</Keywords>
+            <Keywords name="Folders in comment, close">Then Until Repeat Loop +Loop EndCase EndOf Again</Keywords>
             <Keywords name="Keywords1">PREREQUISITE LABEL ADDR</Keywords>
             <Keywords name="Keywords2">VARIABLE&#x000D;&#x000A;CONSTANT&#x000D;&#x000A;VALUE</Keywords>
-            <Keywords name="Keywords3">drop swap over nip tuck rot -rot pick&#x000D;&#x000A;?dup dup &#x000D;&#x000A;2dup 2drop 2swap 2over&#x000D;&#x000A;abs negate min max lshift rshift mod invert and or xor i j</Keywords>
+            <Keywords name="Keywords3">drop swap over nip tuck rot -rot pick&#x000D;&#x000A;?dup dup &#x000D;&#x000A;2dup 2drop 2swap 2over&#x000D;&#x000A;abs negate min max lshift rshift mod invert and or xor i j Within Within?</Keywords>
             <Keywords name="Keywords4">CONSTANT_IDENTIFIER</Keywords>
-            <Keywords name="Keywords5">/Ldw /Stw /Psh /Pop /Swp /Jnz /Jsr /Adc /Add /Sub /And /Xor /Lsr /Zeq /Lit</Keywords>
+            <Keywords name="Keywords5">/Ldw /Stw /Psh /Pop /Swp /Jnz /Jsr /Adc /Add /Sub /And /Xor /Lsr /Zeq /Mlt /Ior /_0 /_1 /_2 /_3 /_4 /_5 /_6 /_7 /_8 /_9 /_A /_B /_C /_D /_E /_F</Keywords>
             <Keywords name="Keywords6">VARIABLE_IDENTIFIER&#x000D;&#x000A;</Keywords>
             <Keywords name="Keywords7">ERROR_IDENTIFIER</Keywords>
             <Keywords name="Keywords8">DEFINITION_IDENTIFIER</Keywords>

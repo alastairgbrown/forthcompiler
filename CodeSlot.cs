@@ -16,12 +16,12 @@ namespace ForthCompiler
 
         public static implicit operator CodeSlot(int value)
         {
-            return new CodeSlot { Code = Code.Lit, Value = value };
+            return new CodeSlot { Code = Code.Literal, Value = value };
         }
 
         public override string ToString()
         {
-            return $"{Code}{(Code == Code.Lit || Code == Code.Address || Code == Code.Label ? $" {Value}" : null)} {Label}";
+            return $"{Code}{(Code == Code.Literal || Code == Code.Address || Code == Code.Label ? $" {Value}" : null)} {Label}";
         }
     }
 }

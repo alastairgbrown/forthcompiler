@@ -163,7 +163,22 @@ namespace ForthCompiler
 
     public enum Code : byte
     {
-        _,
+        _0,
+        _1,
+        _2,
+        _3,
+        _4,
+        _5,
+        _6,
+        _7,
+        _8,
+        _9,
+        _A,
+        _B,
+        _C,
+        _D,
+        _E,
+        _F,
         Ldw,
         Stw,
         Psh,
@@ -175,10 +190,12 @@ namespace ForthCompiler
         Adc,
         Sub,
         And,
+        Ior,
         Xor,
+        Mlt,
         Lsr,
         Zeq,
-        Lit,
+        Literal,
         Label,
         Address
     }

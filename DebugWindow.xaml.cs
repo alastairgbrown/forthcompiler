@@ -140,9 +140,9 @@ namespace ForthCompiler
             return ShowHex.IsChecked ? $"${i:X}" : $"{i}";
         }
 
-        public string FormatAddress(int i)
+        public string FormatAddress(int address)
         {
-            return $"{FormatNumber(i)}/{FormatNumber(i/8)}.{FormatNumber(i%8)}";
+            return $"{FormatNumber(address)}/{address.ToAddressAndSlot():X}";
         }
 
         private void Run(Func<bool> breakCondition)
@@ -315,7 +315,7 @@ namespace ForthCompiler
             if (CommandLine.Text.IsEqual("Words"))
             {
                 CpuStatus.Inlines.Clear();
-                CpuStatus.Inlines.AddRange(Compiler.Words.Keys.OrderBy(w => w).Select(w => 
+                CpuStatus.Inlines.AddRange(Compiler.Words.Keys.OrderBy(w => w).Select(w =>
                     new Run
                     {
                         Text = w + " ",
@@ -324,7 +324,7 @@ namespace ForthCompiler
                         FontStyle = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).FontStyle,
                         TextDecorations = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).TextDecoration,
                         ToolTip = Compiler.Doc.At(w)
-                    
+
                     }));
                 Status.Text = "";
                 CommandLineTokens.Content = null;

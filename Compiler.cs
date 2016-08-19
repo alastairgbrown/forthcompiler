@@ -16,26 +16,24 @@ namespace ForthCompiler
     [SuppressMessage("ReSharper", "UnusedParameter.Local")]
     public class Compiler : IEqualityComparer<CodeSlot>
     {
-        public List<Token> Tokens { get; } = new List<Token>();
-        public int TokenIndex { get; set; }
-
-        public Token Token => TokenIndex < Tokens.Count ? Tokens[TokenIndex] : null;
-        public Token ArgToken => _argIndex < Tokens.Count ? Tokens[_argIndex] : null;
-        private Token _lastToken;
-        public List<CodeSlot> Compilation { get; } = new List<CodeSlot>();
-        private List<Optimization> _optimizations = new List<Optimization>();
-        private readonly List<Token[]> _testCases = new List<Token[]>();
         private static readonly Regex Parser = new Regex(@"""([^""]|"""")*""|\S+|\s+", RegexOptions.Compiled);
 
+        public List<Token> Tokens { get; } = new List<Token>();
+        public int TokenIndex { get; set; }
+        public Token Token => TokenIndex < Tokens.Count ? Tokens[TokenIndex] : null;
+        public Token ArgToken => _argIndex < Tokens.Count ? Tokens[_argIndex] : null;
+        public List<CodeSlot> Compilation { get; } = new List<CodeSlot>();
         public List<CodeSlot> CodeSlots { get; } = new List<CodeSlot>();
         public Dictionary<string, string> Doc { get; } = new Dictionary<string, string>(OrdinalIgnoreCase);
-
         public Dictionary<string, IDictEntry> Words { get; private set; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
         private Dictionary<string, IDictEntry> PrecompileWords { get; set; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
         public Dictionary<string, int> Coverage { get; private set; } = new Dictionary<string, int>(OrdinalIgnoreCase);
         public Dictionary<string, string[]> Sources { get; } = new Dictionary<string, string[]>(OrdinalIgnoreCase);
         public Stack<Structure> StructureStack { get; } = new Stack<Structure>(new[] { new Structure { Name = "Global" } });
 
+        private Token _lastToken;
+        private List<Optimization> _optimizations = new List<Optimization>();
+        private readonly List<Token[]> _testCases = new List<Token[]>();
         private bool _isPrecompilingCompilerCode;
         private int _heapSize;
         private int _argIndex;
@@ -68,7 +66,7 @@ namespace ForthCompiler
         private void LoadCodes()
         {
             foreach (var code in GetValues(typeof(Code)).OfType<Code>()
-                                  .Where(c => c != Code.Lit && c != Code._ && c != Code.Address && c != Code.Label))
+                                  .Where(c => c != Code.Literal && c != Code.Address && c != Code.Label))
             {
                 Words.Add($"/{code}", new MacroCode { Code = code });
                 Doc[$"/{code}"] = $"Inserts raw assembly code for {code}";
@@ -77,7 +75,7 @@ namespace ForthCompiler
 
         public void LoadCore4th(string code = null)
         {
-            ReadFile(0, "Core.4th", y => y, x => x, code ?? "Core.4th".LoadFileOrResource());
+            ReadFile(0, "Core.4th", y => y, x => x, code ?? "Core.4th".LoadText());
             Compile();
             TokenIndex = _prerequisiteIndex = _argIndex = 0;
             _lastToken = null;
@@ -87,7 +85,7 @@ namespace ForthCompiler
 
         public IEnumerable<string> GenerateMif()
         {
-            var depth = CodeSlots.Count / 8;
+            var depth = (CodeSlots.Count + 5) / 6;
 
             yield return $"DEPTH = {depth}; --The size of memory in words";
             yield return "WIDTH = 32; --The size of data in bits";
@@ -99,14 +97,10 @@ namespace ForthCompiler
 
             for (var index = 0; index < depth; index++)
             {
-                var code = Range(index * 8, 8).Sum(i => (int)CodeSlots[i].Code << ((i - index * 8) * 4));
+                var code = Range(0, Min(6, CodeSlots.Count - index * 6))
+                               .Sum(i => (int)CodeSlots[index * 6 + i].Code << (i * 5));
 
                 yield return $"{index:X4} : {code:X8};";
-
-                foreach (var i in Range(index * 8, 8).Where(i => CodeSlots[i].Code == Code.Lit))
-                {
-                    yield return $"{++index:X4} : {CodeSlots[i].Value:X8};";
-                }
             }
 
             yield return "";
@@ -144,17 +138,17 @@ namespace ForthCompiler
             foreach (var testcase in _testCases)
             {
                 var startTC = DateTime.Now;
-                var dict = testcase.ToDict("TestCase", "Produces", "ProducesException", "ProducesCode", "WithCore");
+                var dict = testcase.ToDict("TestCase", "Produces", "ProducesException", "ProducesCode", "ProducesMif", "WithCore");
 
                 if (dict.ContainsKey("Produces"))
                 {
                     yield return $"( TestCase ) {dict["TestCase"].ToText()} ( Produces ) {dict["Produces"].ToText()} ( ) {dict["Produces"].Count(t => !t.IsExcluded)}";
                 }
-                else if (dict.ContainsKey("ProducesException") || dict.ContainsKey("ProducesCode"))
+                else if (dict.ContainsKey("ProducesException") || dict.ContainsKey("ProducesCode") || dict.ContainsKey("ProducesMif"))
                 {
                     var values = dict.ToDictionary(d => d.Key, d => d.Value.ToText());
                     var actual = string.Empty;
-                    var required = dict.At("ProducesException")?.ToText();
+                    var required = dict.At("ProducesException")?.ToText() ?? dict.At("ProducesMif")?.ToText();
 
                     try
                     {
@@ -164,6 +158,10 @@ namespace ForthCompiler
                         {
                             actual = string.Join(null, compiler.CodeSlots);
                             required = string.Join(null, template.GenerateCompiler(dict["ProducesCode"]).CodeSlots);
+                        }
+                        else if (dict.ContainsKey("ProducesMif"))
+                        {
+                            actual = compiler.GenerateMif().FirstOrDefault(line => line.IsEqual(required)) ?? string.Empty;
                         }
                     }
                     catch (Exception ex)
@@ -247,6 +245,7 @@ namespace ForthCompiler
                 if (Token.TokenType == TokenType.Literal)
                 {
                     _argIndex = TokenIndex;
+                    Encode(Code.Psh);
                     Encode(Convert.ToInt32(
                         Token.Text.Trim('$', '#', '%'),
                         Token.Text.StartsWith("$") ? 16 : Token.Text.StartsWith("%") ? 2 : 10));
@@ -264,50 +263,41 @@ namespace ForthCompiler
 
         public void PostCompile(int fromCode = 0, int fromComp = 0, int fromToken = 0)
         {
-            int i, index, lits = 0;
+            int i, index;
             var labels = Compilation.Validate(cs => "No code produced", cs => cs.Count > 0)
                                     .Where(cs => cs.Code == Code.Label)
                                     .GroupBy(cs => cs.Label, OrdinalIgnoreCase)
                                     .ToDictionary(cs => cs.Key, cs => cs.First(), OrdinalIgnoreCase);
+            var addressSize = Compilation.Count.ToPfx().Count();
 
             CodeSlots.SetCount(fromCode);
             foreach (var codeslot in Compilation.Skip(fromComp))
             {
-                if (codeslot.Code == Code.Lit || codeslot.Code == Code.Address)
-                {
-                    lits++;
-                }
+                codeslot.CodeIndex = CodeSlots.Count;
 
-                if (codeslot.Code != Code.Label)
+                switch (codeslot.Code)
                 {
-                    codeslot.CodeIndex = CodeSlots.Count;
-                    CodeSlots.Add(codeslot);
-                }
-
-                if ((codeslot.Code == Code.Label || codeslot == Compilation.Last()) && CodeSlots.Count % 8 > 0)
-                {
-                    CodeSlots.AddRange(Range(0, 8 - CodeSlots.Count % 8).Select(e => (CodeSlot)Code._));
-                }
-
-                for (; CodeSlots.Count % 8 == 0 && lits > 0; lits--)
-                {
-                    CodeSlots.AddRange(Range(0, 8).Select(e => (CodeSlot)null));
-                }
-
-                if (codeslot.Code == Code.Label)
-                {
-                    codeslot.CodeIndex = CodeSlots.Count;
+                    case Code.Label:
+                        break;
+                    case Code.Address:
+                        CodeSlots.AddRange(0.ToPfx(addressSize).ToArray());
+                        break;
+                    case Code.Literal:
+                        CodeSlots.AddRange(codeslot.Value.ToPfx().ToArray());
+                        break;
+                    default:
+                        CodeSlots.Add(codeslot);
+                        break;
                 }
             }
 
             foreach (var address in Compilation.Skip(fromComp).Where(cs => cs.Code == Code.Address))
             {
-                CodeSlots[address.CodeIndex] =
-                    new CodeSlot
-                    {
-                        Code = Code.Lit,
-                        Value = labels.At(address.Label).Validate(a => $"Missing label {address.Label}").CodeIndex / 8,
-                    };
+                address.Value = labels.At(address.Label).Validate(a => $"Missing label {address.Label}").CodeIndex;
+
+                var pfx = address.Value.ToAddressAndSlot().ToPfx(addressSize).ToArray();
+
+                CodeSlots.Replace(address.CodeIndex, addressSize, pfx);
             }
 
             for (i = Tokens.Count - 1, index = CodeSlots.Count; i >= fromToken; i--)
@@ -329,10 +319,10 @@ namespace ForthCompiler
             OptimizeCompile();
             OptimizePeephole(false);
             OptimizePrerequisites();
-            OptimizeAddresses();
-            OptimizeLabels();
+            OptimizeJumpSequences();
+            OptimizeUnreferencedLabels();
             OptimizeUnreachableCode();
-            OptimizeLabels();
+            OptimizeUnreferencedLabels();
             OptimizePeephole(true);
 
             var currentCodeSlots = new HashSet<CodeSlot>(Compilation);
@@ -386,23 +376,12 @@ namespace ForthCompiler
                 var optimization = optimizationSets.At(GetHashCode(Compilation[i]))?
                                                    .FirstOrDefault(o => Compilation.Skip(i).Take(o.From.Length).SequenceEqual(o.From, this));
 
-                if (optimization == null)
-                    continue;
-
-                int common = Min(optimization.From.Length, optimization.To.Length);
-                int remove = Max(optimization.From.Length - optimization.To.Length, 0);
-
-                for (int x = 0; x < common; x++)
+                if (optimization != null)
                 {
-                    Compilation[i + x].Code = optimization.To[x].Code;
-                    Compilation[i + x].Value = optimization.To[x].Value;
-                    Compilation[i + x].Label = optimization.To[x].Label;
+                    Compilation.Replace(i, optimization.From.Length, optimization.To);
+                    Coverage.Increment();
+                    Coverage.Increment(optimization.Name);
                 }
-
-                Compilation.RemoveRange(i + common, remove);
-                Compilation.InsertRange(i + common, optimization.To.Skip(common));
-                Coverage.Increment();
-                Coverage.Increment(optimization.Key);
             }
         }
 
@@ -440,9 +419,10 @@ namespace ForthCompiler
         private Dictionary<string, int[]> GetAddresses()
         {
             return new Dictionary<string, int[]>(
-                            Range(0, Compilation.Count)
-                                .Where(i => Compilation[i].Code == Code.Address)
-                                .GroupBy(i => Compilation[i].Label, OrdinalIgnoreCase)
+                            Range(0, Max(0, Compilation.Count - 1))
+                                .Where(i => Compilation[i].Code == Code.Psh &&
+                                            Compilation[i + 1].Code == Code.Address)
+                                .GroupBy(i => Compilation[i + 1].Label, OrdinalIgnoreCase)
                                 .ToDictionary(g => g.Key, g => g.ToArray(), OrdinalIgnoreCase))
                     { { "Global.Placeholder", new int[0] } };
         }
@@ -459,7 +439,7 @@ namespace ForthCompiler
         ///   /jnz   /jnz   /jnz
         /// </summary>
         [OptimizationMethod]
-        public void OptimizeAddresses()
+        public void OptimizeJumpSequences()
         {
             var labels = Range(0, Compilation.Count)
                                    .Where(i => Compilation[i].Code == Code.Label)
@@ -470,13 +450,14 @@ namespace ForthCompiler
             {
                 var next = i;
 
-                while (next + 1 < Compilation.Count &&
-                       Compilation[next].Code == Code.Address &&
-                       Compilation[next + 1].Code == Code.Jnz &&
-                       labels.ContainsKey(Compilation[next].Label))
+                while (next + 2 < Compilation.Count &&
+                       Compilation[next].Code == Code.Psh &&
+                       Compilation[next + 1].Code == Code.Address &&
+                       Compilation[next + 2].Code == Code.Jnz &&
+                       labels.ContainsKey(Compilation[next + 1].Label))
                 {
-                    Compilation[i].Label = Compilation[next].Label;
-                    next = labels[Compilation[next].Label];
+                    Compilation[i + 1].Label = Compilation[next + 1].Label;
+                    next = labels[Compilation[next + 1].Label];
                     next += Compilation.Skip(next).TakeWhile(x => x.Code == Code.Label).Count();
                 }
 
@@ -489,13 +470,13 @@ namespace ForthCompiler
         }
 
         [OptimizationMethod]
-        public void OptimizeLabels()
+        public void OptimizeUnreferencedLabels()
         {
             var addresses = GetAddresses();
 
             foreach (var i in Range(0, Compilation.Count)
-                      .Where(i => Compilation[i].Code == Code.Label && !addresses.ContainsKey(Compilation[i].Label))
-                      .Reverse())
+                              .Where(i => Compilation[i].Code == Code.Label && !addresses.ContainsKey(Compilation[i].Label))
+                              .Reverse())
             {
                 Compilation.RemoveAt(i);
                 Coverage.Increment();
@@ -505,54 +486,40 @@ namespace ForthCompiler
         [OptimizationMethod]
         public void OptimizeUnreachableCode()
         {
-            var addresses = GetAddresses();
-
             foreach (var section in Range(2, Max(0, Compilation.Count - 2))
                                         .Where(i => Compilation[i - 2].Code != Code.And &&
                                                     Compilation[i - 1].Code == Code.Jnz)
-                                        .Select(i => new
-                                        {
-                                            Index = i,
-                                            Count = Compilation.Skip(i)
-                                                                       .TakeWhile(cs => cs.Code != Code.Label || !addresses.ContainsKey(cs.Label))
-                                                                       .Count()
-                                        })
-                                        .Where(s => s.Count > 0)
-                                        .Reverse())
+                                        .ToDictionary(i => i, i => Compilation.Skip(i).TakeWhile(cs => cs.Code != Code.Label).Count())
+                                        .Where(s => s.Value > 0)
+                                        .OrderByDescending(s => s.Key))
             {
-                Compilation.RemoveRange(section.Index, section.Count);
+                Compilation.RemoveRange(section.Key, section.Value);
                 Coverage.Increment();
             }
         }
 
         public void CoverageReport()
         {
-            var items = Words.ToDictionary(x => x.Key, x => new { x.Value.GetType().Name, Coverage = Coverage.At(x.Key) }, OrdinalIgnoreCase);
+            var optimizMethods = GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                                     .Where(m => m.GetCustomAttribute<OptimizationMethod>() != null);
+            var items = Words.Select(x => new { Name = x.Key, Refs = Coverage.At(x.Key), Type = x.Value.GetType() }).ToList();
 
-            foreach (var optimization in _optimizations)
+            items.AddRange(_optimizations.Select(x => new { x.Name, Refs = Coverage.At(x.Name), Type = x.GetType()}));
+            items.AddRange(optimizMethods.Select(x => new { x.Name, Refs = Coverage.At(x.Name), Type = typeof(OptimizationMethod) }));
+
+            foreach (var type in items.GroupBy(i => i.Type.Name))
             {
-                items.Add(optimization.Key, new {optimization.GetType().Name, Coverage = Coverage.At(optimization.Key)});
+                Console.WriteLine($"{type.Key}");
+                type.OrderBy(i => i.Refs).ThenBy(i => i.Name).ForEach(i => Console.WriteLine($"  {i.Refs} refs to {i.Name}"));
             }
 
-            foreach (var method in GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                            .Where(m => m.GetCustomAttribute<OptimizationMethod>() != null))
-
-            {
-                items.Add(method.Name, new { method.GetType().Name, Coverage = Coverage.At(method.Name) });
-            }
-
-            foreach (var item in items.OrderBy(i => i.Value.Name).ThenBy(i => i.Value.Coverage))
-            {
-                Console.WriteLine($"{item.Value.Coverage} refs to {item.Value.Name} {item.Key}");
-            }
-
-            var report = items.GroupBy(i => i.Value.Name).OrderBy(g => g.Key).Select(g =>
-                            $"( TestCase {g.Count()} {g.Key}s )" +
-                            $" {g.Count(i => i.Value.Coverage == 0)} ( unreferenced )" +
-                            $" {g.Count(i => i.Value.Coverage > 0)} ( referenced ) drop 0 1");
             var tokenOrig = Tokens.Count;
             var compOrig = Compilation.Count;
             var codeOrig = CodeSlots.Count;
+            var report = items.Where(i => !Regex.IsMatch(i.Name, "^/_[0-9A-F]$")).GroupBy(i => i.Type.Name).OrderBy(g => g.Key).Select(g =>
+                            $"( TestCase {g.Count()} {g.Key}s ) " +
+                            $"{g.Count(i => i.Refs > 0)} ( referenced ) " +
+                            $"{g.Count(i => i.Refs == 0)} ( unreferenced ) nip 0 1");
 
             ReadFile(tokenOrig, "Coverage", x => x, y => y, report.ToArray());
             Compile(tokenOrig);
@@ -567,15 +534,6 @@ namespace ForthCompiler
             {
             }
         }
-
-        private void ParseDocumentation(string key, IEnumerable<Token> tokens)
-        {
-            Doc[key] = string.Join(null,
-                tokens.SkipWhile(t => !t.IsDocumentation)
-                      .TakeWhile(t => t.IsExcluded)
-                      .Select(t => t.Text)).Trim('(', ')', '\\', ' ', '\t', '\r', '\n');
-        }
-
 
         private void ParseSymbol(IDictionary<string, IDictEntry> dict)
         {
@@ -621,15 +579,7 @@ namespace ForthCompiler
 
             var slot = Compilation.IndexOf(start.CodeSlot);
 
-            if (Compilation.Skip(slot).Any(cs => cs.Code == Code.Label))
-            {
-                PostCompile();
-            }
-            else
-            {
-                CodeSlots.Clear();
-                CodeSlots.AddRange(Compilation);
-            }
+            PostCompile();
 
             var cpu = new Cpu(this) { ProgramIndex = CodeSlots.IndexOf(start.CodeSlot) };
 
@@ -657,7 +607,7 @@ namespace ForthCompiler
         {
             var filename = _argValues[0].Dequote();
 
-            ReadFile(TokenIndex + 1, filename, y => y, x => x, filename.LoadFileOrResource());
+            ReadFile(TokenIndex + 1, filename, y => y, x => x, filename.LoadText());
         }
 
         [InternalMethod(Arguments = 1, IsPrecompile = false, Doc = "Includes named file")]
@@ -677,18 +627,22 @@ namespace ForthCompiler
         private void Macro()
         {
             var macro = Words.At(_argValues[0].Dequote(), () => new Macro { Tokens = ParseBlock().Skip(1).ToList() }, true);
-            ParseDocumentation(_argValues[0].Dequote(), macro.Tokens);
+            Doc[_argValues[0].Dequote()] = macro.Tokens.ToDoc();
         }
 
 
-        [InternalMethod(Doc = "Defines peephole Optimization - usage: OPTIMIZATION UnoptimisedCode OPTIMIZESTO OptimisedCode OPTIMIZATION")]
+        [InternalMethod(Doc = "Defines peephole Optimization - usage: OPTIMIZATION UnoptimisedCode OPTIMIZESTO OptimisedCode [ ISLASTPASS ] OPTIMIZATION")]
         public void Optimization()
         {
             _optimizations.Add(new Optimization { Tokens = ParseBlock().ToArray() });
         }
 
-        [InternalMethod(Doc = "Defines TestCase - usage: TESTCASE TestCode PRODUCES Result ENDTESTCASE\r\n" +
-                      "or TESTCASE TestCode [ WITHCORE CoreCode ] PRODUCESEXCEPTION Exception ENDTESTCASE")]
+        [InternalMethod(Doc =
+            "Defines TestCase - usage: TESTCASE TestCode                       PRODUCES          ExpectedResult    ENDTESTCASE\r\n" +
+            "                       or TESTCASE TestCode [ WITHCORE CoreCode ] PRODUCESEXCEPTION ExpectedException ENDTESTCASE\r\n" +
+            "                       or TESTCASE TestCode                       PRODUCESCODE      ExpectedCode      ENDTESTCASE\r\n" +
+            "                       or TESTCASE TestCode                       PRODUCESMIF       ExpectedMifLine   ENDTESTCASE\r\n" +
+            "                       or TESTCASE TestCode                                                           ENDTESTCASE")]
         public void TestCase()
         {
             _testCases.Add(ParseBlock().ToArray());
@@ -718,7 +672,7 @@ namespace ForthCompiler
 
             if (struc.Definition != null)
             {
-                ParseDocumentation(struc.Definition, Tokens.Skip(struc.Value).Take(TokenIndex - struc.Value));
+                Doc[struc.Definition] = Tokens.Skip(struc.Value).Take(TokenIndex - struc.Value).ToDoc();
             }
         }
 
@@ -734,7 +688,7 @@ namespace ForthCompiler
             ParseWhiteSpace(t => t.IsExcluded && !t.IsDocumentation);
             if (Token.IsDocumentation)
             {
-                ParseDocumentation(_argValues[0], Tokens.Skip(start));
+                Doc[_argValues[0]] = Tokens.Skip(start).ToDoc();
             }
             TokenIndex = start;
         }
@@ -745,6 +699,7 @@ namespace ForthCompiler
             var prefix = _argValues[0].Split('.').First();
             var structure = StructureStack.FirstOrDefault(s => s.Name.IsEqual(prefix)).Validate(s => $"Missing {prefix}");
 
+            Encode(Code.Psh);
             Encode(new CodeSlot { Code = Code.Address, Label = _argValues[0] + structure.Suffix });
         }
 
@@ -774,7 +729,7 @@ namespace ForthCompiler
             ParseWhiteSpace(t => t.IsExcluded && !t.IsDocumentation);
             if (Token.IsDocumentation)
             {
-                ParseDocumentation(_argValues[0], Tokens.Skip(start));
+                Doc[_argValues[0]] = Tokens.Skip(start).ToDoc();
             }
             TokenIndex = start;
         }
@@ -803,7 +758,11 @@ namespace ForthCompiler
             var start = Tokens[StructureStack.Pop("[").Value];
             var cpu = Evaluate(start);
 
-            cpu.ForthStack.Reverse().ForEach(v => Encode(v));
+            cpu.ForthStack.Reverse().ForEach(v =>
+            {
+                Encode(Code.Psh);
+                Encode(v);
+            });
         }
 
         [InternalMethod(Name = "(", IsComment = true, Doc = "Defines a comment - usage ( comment text )")]
@@ -814,7 +773,7 @@ namespace ForthCompiler
             Token.TokenType = TokenType.Excluded;
         }
 
-        [InternalMethod(Name = "\\", IsComment = true, Doc = "Defines a line comment - usage \\ comment text <end-of-line>")]
+        [InternalMethod(Name = "\\", IsComment = true, Doc = @"Defines a line comment - usage \ comment text <end-of-line>")]
         private void CommentBackSlash()
         {
             var start = Token;
@@ -900,7 +859,7 @@ namespace ForthCompiler
             return Tokens.ToText();
         }
 
-        public string Key => Tokens.ToText();
+        public string Name => Tokens.ToText();
         public Token[] Tokens { get; set; }
         public CodeSlot[] From { get; set; } = { };
         public CodeSlot[] To { get; set; } = { };
