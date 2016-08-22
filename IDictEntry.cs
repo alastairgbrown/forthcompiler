@@ -14,7 +14,7 @@ namespace ForthCompiler
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Variable;
-            compiler.Encode(Code.Psh);
+            compiler.Encode(OpCode.Psh);
             compiler.Encode(HeapAddress);
         }
     }
@@ -24,7 +24,7 @@ namespace ForthCompiler
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Constant;
-            compiler.Encode(Code.Psh);
+            compiler.Encode(OpCode.Psh);
             compiler.Encode(Value);
         }
 
@@ -43,7 +43,7 @@ namespace ForthCompiler
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Definition;
-            compiler.Macro($"addr {Label} /jsr label Global.Placeholder");
+            compiler.Macro($"addr {Label} /jsr label .Placeholder");
         }
     }
 
@@ -80,7 +80,7 @@ namespace ForthCompiler
                 compiler.ParseWhiteSpace();
                 compiler.Token.TokenType = TokenType.Definition;
                 var name = compiler.Token.Text.Dequote();
-                definition = compiler.Words.At(name, () => new Definition($"Global.{name}"), true);
+                definition = compiler.Words.At(name, () => new Definition($".{name}"), true);
             }
 
             var token = compiler.Token;
@@ -92,13 +92,13 @@ namespace ForthCompiler
         }
     }
 
-    public class MacroCode : IDictEntry
+    public class RawOpCode : IDictEntry
     {
-        public Code Code { get; set; }
+        public OpCode OpCode { get; set; }
 
         public void Process(Compiler compiler)
         {
-            compiler.Encode(Code);
+            compiler.Encode(OpCode);
         }
     }
 }

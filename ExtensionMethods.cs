@@ -208,7 +208,7 @@ namespace ForthCompiler
             var msbit = Range(1, 31).Reverse().FirstOrDefault(i => ((twosComp >> i) & 1) != (value < 0 ? 1 : 0));
             var needed = length ?? ((msbit + 5) / 4);
 
-            return codes.Skip(codes.Length - needed).Select(c => (CodeSlot)(Code)((int)Code._0 + c));
+            return codes.Skip(codes.Length - needed).Select(c => (CodeSlot)(OpCode)((int)OpCode._0 + c));
         }
 
         public static void Replace([NotNull] this List<CodeSlot> list, int index, int remove, CodeSlot[] add)
@@ -218,7 +218,7 @@ namespace ForthCompiler
 
             for (int x = 0; x < common; x++)
             {
-                list[index + x].Code = add[x].Code;
+                list[index + x].OpCode = add[x].OpCode;
                 list[index + x].Value = add[x].Value;
                 list[index + x].Label = add[x].Label;
             }

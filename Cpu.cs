@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using static System.Linq.Enumerable;
+using static System.StringComparer;
 
 namespace ForthCompiler
 {
@@ -23,14 +24,18 @@ namespace ForthCompiler
         public object[] LastState { get; private set; }
         private readonly List<CodeSlot> _codeslots;
         private readonly Dictionary<int, string> _definitions;
+        private readonly Dictionary<string, int> _labels;
 
-        public Cpu(Compiler compiler)
+        public Cpu(List<CodeSlot> codeSlots)
         {
-            _codeslots = compiler.CodeSlots;
-            _definitions = _codeslots.Where(cs => cs?.Label?.StartsWith("Global.") == true)
+            _codeslots = codeSlots;
+            _definitions = _codeslots.Where(cs => cs?.Label?.StartsWith(".") == true)
                                      .GroupBy(cs => cs.CodeIndex)
                                      .ToDictionary(cs => cs.Key, cs => cs.First().Label);
-            CallStack.Push(new Structure { Name = "Global.Global.0" });
+            _labels = Range(0, _codeslots.Count).Where(i => _codeslots[i].OpCode == OpCode.Label)
+                                     .GroupBy(i => _codeslots[i].Label, OrdinalIgnoreCase)
+                                     .ToDictionary(g => g.Key, g => g.First(), OrdinalIgnoreCase);
+            CallStack.Push(new Structure { Name = "..0" });
         }
 
         public IEnumerable<object> CurrState => new object[]
@@ -55,28 +60,27 @@ namespace ForthCompiler
             var code = _codeslots[ProgramIndex++];
             ulong add;
 
-            switch (code.Code)
+            switch (code.OpCode)
             {
-                case Code.Ldw:
+                case OpCode.Ldw:
                     _top = Heap.At(_top);
                     break;
-                case Code.Stw:
+                case OpCode.Stw:
                     Heap[_top] = _next;
                     _top = _next;
-                    _next = Stack.Pop();
                     break;
-                case Code.Psh:
+                case OpCode.Psh:
                     Stack.Push(_next);
                     _next = _top;
                     break;
-                case Code.Pop:
+                case OpCode.Pop:
                     _top = _next;
                     _next = Stack.Pop();
                     break;
-                case Code.Swp:
+                case OpCode.Swp:
                     _next = Interlocked.Exchange(ref _top, _next);
                     break;
-                case Code.Jnz:
+                case OpCode.Jnz:
                     if (_top != 0)
                     {
                         ProgramIndex = _top.ToCodeIndex();
@@ -84,62 +88,72 @@ namespace ForthCompiler
                     _top = _next;
                     _next = Stack.Pop();
                     break;
-                case Code.Jsr:
+                case OpCode.Jsr:
                     var temp = ProgramIndex.ToAddressAndSlot();
                     ProgramIndex = _top.ToCodeIndex();
                     _top = temp;
                     break;
-                case Code.Add:
+                case OpCode.Add:
                     add = (ulong)unchecked((uint)_next) + unchecked((uint)_top);
                     _carry = (int)(add >> 32) & 1;
                     _top = unchecked((int)add);
                     _next = Stack.Pop();
                     break;
-                case Code.Adc:
+                case OpCode.Adc:
                     add = (ulong)unchecked((uint)_next) + unchecked((uint)_top) + (uint)_carry;
                     _carry = (int)(add >> 32) & 1;
                     _top = unchecked((int)add);
                     _next = Stack.Pop();
                     break;
-                case Code.Sub:
+                case OpCode.Sub:
                     add = (ulong)unchecked((uint)_next) + ~unchecked((uint)_top) + 1;
                     _carry = (int)(add >> 32) & 1;
                     _top = unchecked((int)add);
                     _next = Stack.Pop();
                     break;
-                case Code.And:
+                case OpCode.And:
                     _top &= _next;
                     _next = Stack.Pop();
                     break;
-                case Code.Xor:
+                case OpCode.Xor:
                     _top ^= _next;
                     _next = Stack.Pop();
                     break;
-                case Code.Ior:
+                case OpCode.Ior:
                     _top |= _next;
                     _next = Stack.Pop();
                     break;
-                case Code.Mlt:
+                case OpCode.Mlt:
                     _top *= _next;
                     _next = Stack.Pop();
                     break;
-                case Code.Lsr:
+                case OpCode.Lsr:
                     _carry = _top & 1;
                     _top = _top >> 1;
                     break;
-                case Code.Zeq:
+                case OpCode.Zeq:
                     _top = _top == 0 ? -1 : 0;
                     break;
+                case OpCode.Literal:
+                    _top = code.Value;
+                    break;
+                case OpCode.Address:
+                    _labels.ContainsKey(code.Label).Validate(a => $"Missing {code.Label}", v => v);
+                    _top = _labels[code.Label].ToAddressAndSlot();
+                    break;
                 default:
-                    if (!_loadingPfx)
+                    if ((int)code.OpCode >= (int)OpCode._0 && (int)code.OpCode <= (int)OpCode._F)
                     {
-                        _top = (int)code.Code >= (int)Code._8 ? -1 : 0;
+                        if (!_loadingPfx)
+                        {
+                            _top = (int)code.OpCode >= (int)OpCode._8 ? -1 : 0;
+                        }
+                        _top = (_top << 4) | (int)code.OpCode;
                     }
-                    _top = (_top << 4) | (int)code.Code;
                     break;
             }
 
-            _loadingPfx = (int)code.Code <= (int)Code._F;
+            _loadingPfx = (int)code.OpCode <= (int)OpCode._F;
 
             while (ProgramIndex >= 0 && ProgramIndex < _codeslots.Count && _codeslots[ProgramIndex] == null)
             {
@@ -171,7 +185,7 @@ namespace ForthCompiler
                     break;
                 }
 
-                if (_codeslots[lastSlot].Code == Code.Jsr && _definitions.ContainsKey(ProgramIndex))
+                if (_codeslots[lastSlot].OpCode == OpCode.Jsr && _definitions.ContainsKey(ProgramIndex))
                 {
                     CallStack.Peek().Value = _top.ToCodeIndex();
                     CallStack.Push(new Structure { Name = _definitions[ProgramIndex] });

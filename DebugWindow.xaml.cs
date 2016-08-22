@@ -65,7 +65,7 @@ namespace ForthCompiler
 
             if (error != null)
             {
-                Cpu = new Cpu(Compiler);
+                Cpu = new Cpu(Compiler.CodeSlots);
                 ProgramIndex = (Compiler.ArgToken?.CodeIndex ?? 1) - 1;
                 Refresh();
                 CpuStatus.Inlines.Clear();
@@ -208,7 +208,7 @@ namespace ForthCompiler
             Compiler.Compilation.SetCount(_compOrig);
             Compiler.CodeSlots.SetCount(_codeOrig);
             CommandLine.Text = "";
-            Cpu = new Cpu(Compiler);
+            Cpu = new Cpu(Compiler.CodeSlots);
             ProgramIndex = 0;
 
             HeapItems.Clear();
@@ -229,7 +229,7 @@ namespace ForthCompiler
 
             foreach (var test in tests.Where(t => t.IsTestCase))
             {
-                Cpu = new Cpu(Compiler) { ProgramIndex = test.CodeIndex };
+                Cpu = new Cpu(Compiler.CodeSlots) { ProgramIndex = test.CodeIndex };
                 Cpu.Run(() => Cpu.ProgramIndex >= test.CodeIndex + test.CodeCount);
 
                 var stack = Cpu.ForthStack.ToArray();

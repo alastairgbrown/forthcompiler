@@ -29,7 +29,7 @@ namespace ForthCompiler
         private Dictionary<string, IDictEntry> PrecompileWords { get; set; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
         public Dictionary<string, int> Coverage { get; private set; } = new Dictionary<string, int>(OrdinalIgnoreCase);
         public Dictionary<string, string[]> Sources { get; } = new Dictionary<string, string[]>(OrdinalIgnoreCase);
-        public Stack<Structure> StructureStack { get; } = new Stack<Structure>(new[] { new Structure { Name = "Global" } });
+        public Stack<Structure> StructureStack { get; } = new Stack<Structure>(new[] { new Structure { Name = string.Empty } });
 
         private Token _lastToken;
         private List<Optimization> _optimizations = new List<Optimization>();
@@ -65,11 +65,11 @@ namespace ForthCompiler
 
         private void LoadCodes()
         {
-            foreach (var code in GetValues(typeof(Code)).OfType<Code>()
-                                  .Where(c => c != Code.Literal && c != Code.Address && c != Code.Label))
+            foreach (var opcode in GetValues(typeof(OpCode)).OfType<OpCode>()
+                                  .Where(c => (int)c > (int)OpCode.NativeStart && (int)c < (int)OpCode.NativeStop))
             {
-                Words.Add($"/{code}", new MacroCode { Code = code });
-                Doc[$"/{code}"] = $"Inserts raw assembly code for {code}";
+                Words.Add($"/{opcode}", new RawOpCode { OpCode = opcode });
+                Doc[$"/{opcode}"] = $"Inserts raw assembly code for {opcode}";
             }
         }
 
@@ -98,7 +98,7 @@ namespace ForthCompiler
             for (var index = 0; index < depth; index++)
             {
                 var code = Range(0, Min(6, CodeSlots.Count - index * 6))
-                               .Sum(i => (int)CodeSlots[index * 6 + i].Code << (i * 5));
+                               .Sum(i => (int)CodeSlots[index * 6 + i].OpCode << (i * 5));
 
                 yield return $"{index:X4} : {code:X8};";
             }
@@ -245,7 +245,7 @@ namespace ForthCompiler
                 if (Token.TokenType == TokenType.Literal)
                 {
                     _argIndex = TokenIndex;
-                    Encode(Code.Psh);
+                    Encode(OpCode.Psh);
                     Encode(Convert.ToInt32(
                         Token.Text.Trim('$', '#', '%'),
                         Token.Text.StartsWith("$") ? 16 : Token.Text.StartsWith("%") ? 2 : 10));
@@ -265,7 +265,7 @@ namespace ForthCompiler
         {
             int i, index;
             var labels = Compilation.Validate(cs => "No code produced", cs => cs.Count > 0)
-                                    .Where(cs => cs.Code == Code.Label)
+                                    .Where(cs => cs.OpCode == OpCode.Label)
                                     .GroupBy(cs => cs.Label, OrdinalIgnoreCase)
                                     .ToDictionary(cs => cs.Key, cs => cs.First(), OrdinalIgnoreCase);
             var addressSize = Compilation.Count.ToPfx().Count();
@@ -275,14 +275,20 @@ namespace ForthCompiler
             {
                 codeslot.CodeIndex = CodeSlots.Count;
 
-                switch (codeslot.Code)
+                switch (codeslot.OpCode)
                 {
-                    case Code.Label:
+                    case OpCode.Org:
+                        var toAdd = (codeslot.Value - CodeSlots.Count).Validate(
+                                        x => $"Org value decreasing from {CodeSlots.Count} to {codeslot.Value}", 
+                                        x => x >= 0);
+                        CodeSlots.AddRange(Range(0, toAdd).Select(x => (CodeSlot)OpCode._0));
                         break;
-                    case Code.Address:
+                    case OpCode.Label:
+                        break;
+                    case OpCode.Address:
                         CodeSlots.AddRange(0.ToPfx(addressSize).ToArray());
                         break;
-                    case Code.Literal:
+                    case OpCode.Literal:
                         CodeSlots.AddRange(codeslot.Value.ToPfx().ToArray());
                         break;
                     default:
@@ -291,7 +297,7 @@ namespace ForthCompiler
                 }
             }
 
-            foreach (var address in Compilation.Skip(fromComp).Where(cs => cs.Code == Code.Address))
+            foreach (var address in Compilation.Skip(fromComp).Where(cs => cs.OpCode == OpCode.Address))
             {
                 address.Value = labels.At(address.Label).Validate(a => $"Missing label {address.Label}").CodeIndex;
 
@@ -390,7 +396,7 @@ namespace ForthCompiler
         {
             var removePrereqs = new HashSet<string>(OrdinalIgnoreCase);
             var definitionsByLabel = Words.Values.OfType<Definition>().ToDictionary(d => d.Label, d => d, OrdinalIgnoreCase);
-            var referencedDefinitions = new HashSet<IDictEntry>(Compilation.Where(cs => cs.Code == Code.Address)
+            var referencedDefinitions = new HashSet<IDictEntry>(Compilation.Where(cs => cs.OpCode == OpCode.Address)
                                                                            .Select(cs => definitionsByLabel.At(cs.Label ?? ""))
                                                                            .Where(l => l != null));
             var prereqs = Words.Where(w => (w.Value as Macro)?.Prereqs != null)
@@ -406,8 +412,8 @@ namespace ForthCompiler
 
             foreach (var name in removePrereqs)
             {
-                var startLabel = $"Global.{name}.Start";
-                var stopLabel = $"Global.{name}.Stop";
+                var startLabel = $".{name}.Start";
+                var stopLabel = $".{name}.Stop";
                 var start = Range(0, Compilation.Count).First(i => Compilation[i].Label.IsEqual(startLabel));
                 var stop = Range(start, Compilation.Count).First(i => Compilation[i].Label.IsEqual(stopLabel));
 
@@ -420,11 +426,11 @@ namespace ForthCompiler
         {
             return new Dictionary<string, int[]>(
                             Range(0, Max(0, Compilation.Count - 1))
-                                .Where(i => Compilation[i].Code == Code.Psh &&
-                                            Compilation[i + 1].Code == Code.Address)
+                                .Where(i => Compilation[i].OpCode == OpCode.Psh &&
+                                            Compilation[i + 1].OpCode == OpCode.Address)
                                 .GroupBy(i => Compilation[i + 1].Label, OrdinalIgnoreCase)
                                 .ToDictionary(g => g.Key, g => g.ToArray(), OrdinalIgnoreCase))
-                    { { "Global.Placeholder", new int[0] } };
+                    { { ".Placeholder", new int[0] } };
         }
 
         /// <summary>
@@ -442,7 +448,7 @@ namespace ForthCompiler
         public void OptimizeJumpSequences()
         {
             var labels = Range(0, Compilation.Count)
-                                   .Where(i => Compilation[i].Code == Code.Label)
+                                   .Where(i => Compilation[i].OpCode == OpCode.Label)
                                    .GroupBy(i => Compilation[i].Label, OrdinalIgnoreCase)
                                    .ToDictionary(g => g.Key, g => g.First(), OrdinalIgnoreCase);
 
@@ -451,14 +457,14 @@ namespace ForthCompiler
                 var next = i;
 
                 while (next + 2 < Compilation.Count &&
-                       Compilation[next].Code == Code.Psh &&
-                       Compilation[next + 1].Code == Code.Address &&
-                       Compilation[next + 2].Code == Code.Jnz &&
+                       Compilation[next].OpCode == OpCode.Psh &&
+                       Compilation[next + 1].OpCode == OpCode.Address &&
+                       Compilation[next + 2].OpCode == OpCode.Jnz &&
                        labels.ContainsKey(Compilation[next + 1].Label))
                 {
                     Compilation[i + 1].Label = Compilation[next + 1].Label;
                     next = labels[Compilation[next + 1].Label];
-                    next += Compilation.Skip(next).TakeWhile(x => x.Code == Code.Label).Count();
+                    next += Compilation.Skip(next).TakeWhile(x => x.OpCode == OpCode.Label).Count();
                 }
 
                 if (next > i)
@@ -475,7 +481,7 @@ namespace ForthCompiler
             var addresses = GetAddresses();
 
             foreach (var i in Range(0, Compilation.Count)
-                              .Where(i => Compilation[i].Code == Code.Label && !addresses.ContainsKey(Compilation[i].Label))
+                              .Where(i => Compilation[i].OpCode == OpCode.Label && !addresses.ContainsKey(Compilation[i].Label))
                               .Reverse())
             {
                 Compilation.RemoveAt(i);
@@ -487,9 +493,9 @@ namespace ForthCompiler
         public void OptimizeUnreachableCode()
         {
             foreach (var section in Range(2, Max(0, Compilation.Count - 2))
-                                        .Where(i => Compilation[i - 2].Code != Code.And &&
-                                                    Compilation[i - 1].Code == Code.Jnz)
-                                        .ToDictionary(i => i, i => Compilation.Skip(i).TakeWhile(cs => cs.Code != Code.Label).Count())
+                                        .Where(i => Compilation[i - 2].OpCode != OpCode.And &&
+                                                    Compilation[i - 1].OpCode == OpCode.Jnz)
+                                        .ToDictionary(i => i, i => Compilation.Skip(i).TakeWhile(cs => cs.OpCode != OpCode.Label).Count())
                                         .Where(s => s.Value > 0)
                                         .OrderByDescending(s => s.Key))
             {
@@ -578,15 +584,11 @@ namespace ForthCompiler
             start = Tokens.SkipWhile(t => t != start).FirstOrDefault(t => t.CodeSlot != null).Validate(t => "Missing code to evaluate");
 
             var slot = Compilation.IndexOf(start.CodeSlot);
+            var cpu = new Cpu(Compilation) { ProgramIndex = slot };
 
-            PostCompile();
-
-            var cpu = new Cpu(this) { ProgramIndex = CodeSlots.IndexOf(start.CodeSlot) };
-
-            cpu.Run(() => cpu.ProgramIndex >= CodeSlots.Count);
+            cpu.Run(() => cpu.ProgramIndex >= Compilation.Count);
             Compilation.SetCount(slot);
             Tokens.SkipWhile(t => t != start).ForEach(t => t.CodeSlot = null);
-            CodeSlots.Clear();
 
             return cpu;
         }
@@ -602,7 +604,7 @@ namespace ForthCompiler
             Compilation.Add(code);
         }
 
-        [InternalMethod(Arguments = 1, IsPrecompile = true, Name = nameof(Include))]
+        [InternalMethod(Name = nameof(Include), Arguments = 1, IsPrecompile = true)]
         private void IncludePrecompile()
         {
             var filename = _argValues[0].Dequote();
@@ -610,9 +612,23 @@ namespace ForthCompiler
             ReadFile(TokenIndex + 1, filename, y => y, x => x, filename.LoadText());
         }
 
-        [InternalMethod(Arguments = 1, IsPrecompile = false, Doc = "Includes named file")]
+        [InternalMethod(Arguments = 1, Doc = "Includes named file")]
         private void Include()
         {
+        }
+
+        [InternalMethod(Name = nameof(Org), IsPrecompile = true)]
+        private void OrgPrecompile()
+        {
+            _prerequisiteIndex = TokenIndex + 1;
+        }
+
+        [InternalMethod(Doc = "Sets program address")]
+        private void Org()
+        {
+            var cpu = Evaluate(_lastToken).Validate(x => "ORG expects 1 preceding value", x => x.ForthStack.Count() == 1);
+
+            Encode(new CodeSlot {OpCode = OpCode.Org, Value = cpu.ForthStack.First() });
         }
 
         [InternalMethod(Doc = "Allots X bytes to heap at compile time")]
@@ -699,8 +715,8 @@ namespace ForthCompiler
             var prefix = _argValues[0].Split('.').First();
             var structure = StructureStack.FirstOrDefault(s => s.Name.IsEqual(prefix)).Validate(s => $"Missing {prefix}");
 
-            Encode(Code.Psh);
-            Encode(new CodeSlot { Code = Code.Address, Label = _argValues[0] + structure.Suffix });
+            Encode(OpCode.Psh);
+            Encode(new CodeSlot { OpCode = OpCode.Address, Label = _argValues[0] + structure.Suffix });
         }
 
         [InternalMethod(Arguments = 1, Doc = "Defines Label - usage: LABEL ScopeName.Label")]
@@ -709,7 +725,7 @@ namespace ForthCompiler
             var prefix = _argValues[0].Split('.').First();
             var structure = StructureStack.FirstOrDefault(s => s.Name.IsEqual(prefix)).Validate(s => $"Missing {prefix}");
 
-            Encode(new CodeSlot { Code = Code.Label, Label = _argValues[0] + structure.Suffix });
+            Encode(new CodeSlot { OpCode = OpCode.Label, Label = _argValues[0] + structure.Suffix });
         }
 
         [InternalMethod(Arguments = 1, Doc = "Defines Variable with value - usage: Value VALUE VariableName")]
@@ -760,7 +776,7 @@ namespace ForthCompiler
 
             cpu.ForthStack.Reverse().ForEach(v =>
             {
-                Encode(Code.Psh);
+                Encode(OpCode.Psh);
                 Encode(v);
             });
         }
@@ -799,10 +815,10 @@ namespace ForthCompiler
                 var tokens = new[] {
                     macro.Tokens.First().Clone(" ", 0),
                     macro.Tokens.First().Clone(nameof(Label), 1),
-                    macro.Tokens.First().Clone($"Global.{name}.Start", 1)
+                    macro.Tokens.First().Clone($".{name}.Start", 1)
                     }.Concat(macro.Tokens).Concat(new[] {
                     macro.Tokens.Last().Clone(nameof(Label), 1),
-                    macro.Tokens.Last().Clone($"Global.{name}.Stop", 1)
+                    macro.Tokens.Last().Clone($".{name}.Stop", 1)
                 }).ToArray();
 
                 Coverage.Increment(name);
@@ -817,12 +833,12 @@ namespace ForthCompiler
 
         public bool Equals(CodeSlot x, CodeSlot y)
         {
-            return x?.Code == y?.Code && x?.Value == y?.Value && x?.Label == y?.Label;
+            return x?.OpCode == y?.OpCode && x?.Value == y?.Value && x?.Label == y?.Label;
         }
 
         public int GetHashCode(CodeSlot obj)
         {
-            return obj.Code.GetHashCode() ^ obj.Value.GetHashCode() ^ (obj.Label?.GetHashCode() ?? 0);
+            return obj.OpCode.GetHashCode() ^ obj.Value.GetHashCode() ^ (obj.Label?.GetHashCode() ?? 0);
         }
     }
 

@@ -161,8 +161,9 @@ namespace ForthCompiler
         }
     }
 
-    public enum Code : byte
+    public enum OpCode
     {
+        NativeStart = -1,
         _0,
         _1,
         _2,
@@ -195,9 +196,11 @@ namespace ForthCompiler
         Mlt,
         Lsr,
         Zeq,
+        NativeStop,
         Literal,
         Label,
-        Address
+        Address,
+        Org
     }
 
     public enum TokenType

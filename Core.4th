@@ -24,7 +24,7 @@ Region \ memory operations
 
     Macro @ /Ldw EndMacro
 
-    Macro ! /Stw /Pop EndMacro
+    Macro ! /Stw /Pop /Pop EndMacro
 
     Macro +! Dup -Rot @ + Swap ! EndMacro
     TestCase Variable TestIncrement EndTestCase
@@ -331,6 +331,14 @@ Region \ Math operators
 EndRegion
 
 Region \ stack operations
+
+	Macro PushC 0 0 /Adc EndMacro
+	TestCase -1 -1 + drop PushC Produces 1 EndTestCase
+	
+	Macro PopC /Lsr /Pop EndMacro
+	TestCase 1 PopC 0 0 /Adc Produces 1 EndTestCase
+	
+	Macro RetI /Swp /Swp /Jnz EndMacro
     
     Macro Dup /Psh EndMacro
     TestCase 1 Dup Produces 1 1 EndTestCase
@@ -559,9 +567,9 @@ Region \ Exception test cases
     TestCase "Begin"                                ProducesException "Missing Again/Until/Repeat"               EndTestCase
     TestCase "Begin While"                          ProducesException "Missing Repeat"                           EndTestCase
     TestCase "Exit"                                 ProducesException "Missing Definition"                       EndTestCase
-    TestCase Addr Name          Label Name          ProducesException "Missing Name"                             EndTestCase
-    TestCase Addr Global.Name   Label Global.Name   ProducesException ""                                         EndTestCase
-    TestCase Addr Global.Name                       ProducesException "Missing Label Global.Name"                EndTestCase
+    TestCase Addr Name    Label Name          		ProducesException "Missing Name"                             EndTestCase
+    TestCase Addr .Name   Label .Name   			ProducesException ""                                         EndTestCase
+    TestCase Addr .Name                       		ProducesException "Missing Label .Name"                		 EndTestCase
     TestCase Constant                               ProducesException "Constant expects 1 arguments"             EndTestCase
     TestCase Constant Name                          ProducesException "missing code to evaluate"                 EndTestCase
     TestCase [ 1 2 ] Constant Name                  ProducesException "Constant expects 1 preceding value"       EndTestCase
@@ -573,17 +581,24 @@ Region \ Exception test cases
     TestCase y                                      ProducesException "y is not defined"                         EndTestCase
     TestCase ]                                      ProducesException "Missing ["                                EndTestCase
     TestCase [                                      ProducesException "Missing ]"                                EndTestCase
+    TestCase [                                      ProducesException "Missing ]"                                EndTestCase
+    TestCase 1 Org 0 Org                  			ProducesException "Org value decreasing from 1 to 0"         EndTestCase
 
 EndRegion
 
 Region \ Optimization test cases
 
+	TestCase Addr .y [ 1 1 + ] Label .y                 ProducesCode 4 2                              		 													  EndTestCase
+    TestCase RetI                 						ProducesCode /Swp /Swp /Jnz   	  	  				  ( Make sure RetI works                            ) EndTestCase
+    TestCase 0 Org 6 Org 1 2 +                 			ProducesCode /_0 /_0 /_0 /_0 /_0 /_0 1 2 +   	  	  ( Make sure Org works                             ) EndTestCase
+    TestCase 0 Org 6 Org 1 2 + WithCore Macro A 9 EndMacro Prerequisite "+" A 
+														ProducesCode /_0 /_0 /_0 /_0 /_0 /_0 9 1 2 +   		  ( Make sure Org works with prerequisites          ) EndTestCase
     TestCase 1 7 8 -1                                   ProducesCode /Psh /_1 /Psh /_7 /Psh /_0 /_8 /Psh /_F  ( Make sure lits are properly compressed          ) EndTestCase
     TestCase [ 1 2 3 Rot ]                              ProducesCode 2 3 1                                    ( Make sure ReturnStackCode is optimized out      ) EndTestCase
     TestCase [ 6 7 * ]                                  ProducesCode 42                                       ( Make sure MulCode is optimized out              ) EndTestCase
     TestCase 5 3 *                                      ProducesCode 5 Dup Dup + +                            ( Make sure 3 * is optimized                      ) EndTestCase
     TestCase 5 3 LShift                                 ProducesCode 5 Dup + Dup + Dup +                      ( Make sure 3 LShift is optimized                 ) EndTestCase
-    TestCase 1 addr Global.b /jnz 2 label Global.b 3    ProducesCode 1 addr Global.b /jnz label Global.b 3    ( Make sure jump Optimization works               ) EndTestCase
+    TestCase 1 addr .b /jnz 2 label .b 3    			ProducesCode 1 addr .b /jnz label .b 3    			  ( Make sure jump Optimization works               ) EndTestCase
     TestCase : ExitTest 11 Exit 22 ; ExitTest           ProducesCode : ExitTest 11 Exit ; ExitTest            ( Make sure unreachable code Optimization works   ) EndTestCase
     TestCase : TestOptimize2 _Take2_ _R1_ @ 2 * _R2_ @ 3 * + _Drop2_ ;                                        (                                                 ) EndTestCase
     TestCase : TestOptimize3 _Take3_ _R1_ @ 2 * _R2_ @ 3 * + _Drop3_ ;                                        (                                                 ) EndTestCase

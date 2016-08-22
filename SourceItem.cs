@@ -82,8 +82,8 @@ namespace ForthCompiler
 
                         block.Inlines.Add(new Run
                         {
-                            Text = $" {codeslot.Code}" +
-                                   $"{(codeslot.Code == Code.Literal || codeslot.Code == Code.Address || codeslot.Code == Code.Label ? " " + Parent.FormatNumber(codeslot.Value) : null)}" +
+                            Text = $" {codeslot.OpCode}" +
+                                   $"{(codeslot.OpCode == OpCode.Literal || codeslot.OpCode == OpCode.Address || codeslot.OpCode == OpCode.Label ? " " + Parent.FormatNumber(codeslot.Value) : null)}" +
                                    $"{codeslot.Label}",
                             Background = current ? Brushes.DarkGoldenrod : Brushes.Transparent,
                             Foreground = current ? Brushes.Black : Brushes.DarkGray,
