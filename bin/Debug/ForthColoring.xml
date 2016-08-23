@@ -15,18 +15,18 @@
             <Keywords name="Numbers, range"></Keywords>
             <Keywords name="Operators1">+ - * @ ! &lt; &gt; &lt;= &gt;= = &lt;&gt;</Keywords>
             <Keywords name="Operators2"></Keywords>
-            <Keywords name="Folders in code1, open">MACRO TESTCASE Optimization Region</Keywords>
+            <Keywords name="Folders in code1, open">Macro TestCase Optimization Region</Keywords>
             <Keywords name="Folders in code1, middle">ProducesException ProducesCode ProducesMif Produces WithCore OptimizesTo IsDefinition</Keywords>
-            <Keywords name="Folders in code1, close">ENDMACRO ENDTESTCASE EndOptimization EndRegion</Keywords>
+            <Keywords name="Folders in code1, close">EndMacro EndTestCase EndOptimization EndRegion</Keywords>
             <Keywords name="Folders in code2, open">:</Keywords>
             <Keywords name="Folders in code2, middle"></Keywords>
             <Keywords name="Folders in code2, close">;</Keywords>
-            <Keywords name="Folders in comment, open">If Begin Do CAse Of Of?</Keywords>
+            <Keywords name="Folders in comment, open">If Begin Do Case Of Of?</Keywords>
             <Keywords name="Folders in comment, middle">While Else</Keywords>
             <Keywords name="Folders in comment, close">Then Until Repeat Loop +Loop EndCase EndOf Again</Keywords>
-            <Keywords name="Keywords1">PREREQUISITE LABEL ADDR</Keywords>
-            <Keywords name="Keywords2">Variable&#x000D;&#x000A;Constatnt&#x000D;&#x000A;Value&#x000D;&#x000A;Org</Keywords>
-            <Keywords name="Keywords3">drop swap over nip tuck rot -rot pick&#x000D;&#x000A;?dup dup &#x000D;&#x000A;2dup 2drop 2swap 2over&#x000D;&#x000A;abs negate min max lshift rshift mod invert and or xor i j Within Within? PushC PopC RetI</Keywords>
+            <Keywords name="Keywords1">Prerequisite Label Addr</Keywords>
+            <Keywords name="Keywords2">Variable&#x000D;&#x000A;Constant&#x000D;&#x000A;Value&#x000D;&#x000A;Org</Keywords>
+            <Keywords name="Keywords3">Drop Swap Over Nip Tuck Rot -Rot Pick&#x000D;&#x000A;?Dup Dup &#x000D;&#x000A;2Dup 2Drop 2Swap 2Over&#x000D;&#x000A;Abs Negate Min Max Lshift Rshift Mod Invert And Or Xor I J Within Within? PushC PopC RetI</Keywords>
             <Keywords name="Keywords4">CONSTANT_IDENTIFIER</Keywords>
             <Keywords name="Keywords5">/Ldw /Stw /Psh /Pop /Swp /Jnz /Jsr /Adc /Add /Sub /And /Xor /Lsr /Zeq /Mlt /Ior /_0 /_1 /_2 /_3 /_4 /_5 /_6 /_7 /_8 /_9 /_A /_B /_C /_D /_E /_F</Keywords>
             <Keywords name="Keywords6">VARIABLE_IDENTIFIER&#x000D;&#x000A;</Keywords>

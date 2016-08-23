@@ -455,16 +455,19 @@ namespace ForthCompiler
             foreach (var i in GetAddresses().SelectMany(a => a.Value))
             {
                 var next = i;
+                var links = new HashSet<int>();
 
                 while (next + 2 < Compilation.Count &&
                        Compilation[next].OpCode == OpCode.Psh &&
                        Compilation[next + 1].OpCode == OpCode.Address &&
                        Compilation[next + 2].OpCode == OpCode.Jnz &&
-                       labels.ContainsKey(Compilation[next + 1].Label))
+                       labels.ContainsKey(Compilation[next + 1].Label) &&
+                       !links.Contains(next))
                 {
                     Compilation[i + 1].Label = Compilation[next + 1].Label;
                     next = labels[Compilation[next + 1].Label];
                     next += Compilation.Skip(next).TakeWhile(x => x.OpCode == OpCode.Label).Count();
+                    links.Add(next);
                 }
 
                 if (next > i)

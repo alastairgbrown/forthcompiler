@@ -105,13 +105,22 @@ namespace ForthCompiler
                 catch (Exception ex)
                 {
                     var pos = compiler.ArgToken;
-                    var line = compiler.Sources[pos.File][pos.Y];
-                    error = $"Error: {ex.Message}{Environment.NewLine}" +
-                            $"File:  {pos.File}({pos.Y + 1},{pos.X + 1}){Environment.NewLine}" +
-                            $"Line:  {line.Substring(0, pos.X)}<<>>{line.Substring(pos.X)}";
+
+                    if (pos == null)
+                    {
+                        error = $"Error: {ex.Message}";
+                    }
+                    else
+                    {
+                        var line = compiler.Sources[pos.File][pos.Y];
+                        error = $"Error: {ex.Message}{Environment.NewLine}" +
+                                $"File:  {pos.File}({pos.Y + 1},{pos.X + 1}){Environment.NewLine}" +
+                                $"Line:  {line.Substring(0, pos.X)}<<>>{line.Substring(pos.X)}";
+
+                    }
+
                     Console.WriteLine(error);
                     compiler.Tokens.SkipWhile(t => t != compiler.ArgToken).ForEach(t => t.TokenType = TokenType.Error);
-                    //compiler.PostCompile();
                 }
             }
 

@@ -142,23 +142,18 @@ namespace ForthCompiler
                     _top = _labels[code.Label].ToAddressAndSlot();
                     break;
                 default:
-                    if ((int)code.OpCode >= (int)OpCode._0 && (int)code.OpCode <= (int)OpCode._F)
+                    if ((int)code.OpCode >= 0x0 && (int)code.OpCode <= 0xF)
                     {
                         if (!_loadingPfx)
                         {
-                            _top = (int)code.OpCode >= (int)OpCode._8 ? -1 : 0;
+                            _top = (int)code.OpCode >= 0x8 ? -1 : 0;
                         }
                         _top = (_top << 4) | (int)code.OpCode;
                     }
                     break;
             }
 
-            _loadingPfx = (int)code.OpCode <= (int)OpCode._F;
-
-            while (ProgramIndex >= 0 && ProgramIndex < _codeslots.Count && _codeslots[ProgramIndex] == null)
-            {
-                ProgramIndex++;
-            }
+            _loadingPfx = (int)code.OpCode >= 0x0 && (int)code.OpCode <= 0xF;
         }
 
         public void Run(Func<bool> breakCondition)
