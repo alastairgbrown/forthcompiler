@@ -167,6 +167,12 @@ namespace ForthCompiler
                 File.WriteAllLines(argMap["-mif"], compiler.GenerateMif());
                 Console.WriteLine($"Generated: {argMap["-mif"]}");
             }
+
+            if (argMap.ContainsKey("-hex"))
+            {
+                File.WriteAllLines(argMap["-hex"], compiler.GenerateHex());
+                Console.WriteLine($"Generated: {argMap["-hex"]}");
+            }
         }
     }
 

@@ -83,28 +83,39 @@ namespace ForthCompiler
             Tokens.Clear();
         }
 
-        public IEnumerable<string> GenerateMif()
+        public IEnumerable<string> GenerateHex()
+        {
+            return GenerateMif(false);
+        }
+
+        public IEnumerable<string> GenerateMif(bool mif = true)
         {
             var depth = (CodeSlots.Count + 5) / 6;
 
-            yield return $"DEPTH = {depth}; --The size of memory in words";
-            yield return "WIDTH = 32; --The size of data in bits";
-            yield return "ADDRESS_RADIX = HEX; --The radix for address values";
-            yield return "DATA_RADIX = HEX; --The radix for data values";
-            yield return "CONTENT-- start of(address: data pairs)";
-            yield return "BEGIN";
-            yield return "";
+            if (mif)
+            {
+                yield return $"DEPTH = {depth}; --The size of memory in words";
+                yield return "WIDTH = 32; --The size of data in bits";
+                yield return "ADDRESS_RADIX = HEX; --The radix for address values";
+                yield return "DATA_RADIX = HEX; --The radix for data values";
+                yield return "CONTENT-- start of(address: data pairs)";
+                yield return "BEGIN";
+                yield return "";
+            }
 
             for (var index = 0; index < depth; index++)
             {
                 var code = Range(0, Min(6, CodeSlots.Count - index * 6))
                                .Sum(i => (int)CodeSlots[index * 6 + i].OpCode << (i * 5));
 
-                yield return $"{index:X4} : {code:X8};";
+                yield return mif ? $"{index:X4} : {code:X8};" : $"{code:X8}";
             }
 
-            yield return "";
-            yield return "END";
+            if (mif)
+            {
+                yield return "";
+                yield return "END";
+            }
         }
 
         private Compiler GenerateCompiler(IEnumerable<Token> code, IEnumerable<Token> core = null)
