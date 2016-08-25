@@ -40,5 +40,10 @@ namespace ForthCompiler
         {
             return $"{File}({Y+1},{X+1}) : {Text} {TokenType} {CodeSlot} {CodeIndex} {CodeCount}";
         }
+
+        public bool IsEqual(string value)
+        {
+            return !IsExcluded && Text.IsEqual(value);
+        }
     }
 }

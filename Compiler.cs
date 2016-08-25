@@ -583,7 +583,7 @@ namespace ForthCompiler
 
             while (TokenIndex < endIndex)
             {
-                if (!Token.IsExcluded && Token.Text.IsEqual(endText))
+                if (Token.IsEqual(endText))
                     yield break;
 
                 yield return Tokens[TokenIndex++];
@@ -656,8 +656,12 @@ namespace ForthCompiler
         [InternalMethod(Arguments = 1, Doc = "Defines macro - usage: MACRO MacroName MacroText ENDMACRO")]
         private void Macro()
         {
-            var macro = Words.At(_argValues[0].Dequote(), () => new Macro { Tokens = ParseBlock().Skip(1).ToList() }, true);
-            Doc[_argValues[0].Dequote()] = macro.Tokens.ToDoc();
+            var tokens = ParseBlock().Skip(1).ToArray();
+            var redefine = tokens.Any(ForthCompiler.Macro.IsRedefine);
+            var macro = Words.At(_argValues[0].Dequote(), () => new Macro(), !redefine);
+
+            macro.Tokens = tokens;
+            Doc[_argValues[0].Dequote()] = tokens.ToDoc();
         }
 
 

@@ -67,7 +67,6 @@ namespace ForthCompiler
                     break;
                 case OpCode.Stw:
                     Heap[_top] = _next;
-                    _top = _next;
                     break;
                 case OpCode.Psh:
                     Stack.Push(_next);

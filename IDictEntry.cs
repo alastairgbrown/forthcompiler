@@ -62,13 +62,18 @@ namespace ForthCompiler
 
     public class Macro : IDictEntry
     {
-        public List<Token> Tokens { get; set; }
+        public Token[] Tokens { get; set; }
 
         public Dictionary<bool,List<string>> Prereqs { get; set; }
 
         private static bool IsDefinition(Token token)
         {
-            return !token.IsExcluded && token.Text.IsEqual("IsDefinition");
+            return token.IsEqual("IsDefinition");
+        }
+
+        public static bool IsRedefine(Token token)
+        {
+            return token.IsEqual("Redefine");
         }
 
         public void Process(Compiler compiler)
@@ -87,7 +92,7 @@ namespace ForthCompiler
 
             compiler.Tokens.InsertRange(
                 compiler.TokenIndex + 1,
-                Tokens.Where(t => !IsDefinition(t)).Select(t =>
+                Tokens.Where(t => !IsDefinition(t) && !IsRedefine(t)).Select(t =>
                     token.Clone(t.Text.Replace("{Label}", definition?.Label ?? "{Label}"), token.MacroLevel + 1, t.TokenType)));
         }
     }
