@@ -279,7 +279,7 @@ namespace ForthCompiler
                                     .Where(cs => cs.OpCode == OpCode.Label)
                                     .GroupBy(cs => cs.Label, OrdinalIgnoreCase)
                                     .ToDictionary(cs => cs.Key, cs => cs.First(), OrdinalIgnoreCase);
-            var addressSize = Compilation.Count.ToPfx().Count();
+            var addressSize = Compilation.Count.ToPfx().Count() + 1;
 
             CodeSlots.SetCount(fromCode);
             foreach (var codeslot in Compilation.Skip(fromComp))

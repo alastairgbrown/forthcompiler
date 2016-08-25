@@ -155,7 +155,6 @@ namespace ForthCompiler
             compiler.Compile();
             compiler.Optimize(!argMap.ContainsKey("-nooptimize"));
             compiler.PostCompile();
-            ;
 
             if (argMap.ContainsKey("-testcases"))
             {
