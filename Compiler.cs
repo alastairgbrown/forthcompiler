@@ -29,7 +29,7 @@ namespace ForthCompiler
         private Dictionary<string, IDictEntry> PrecompileWords { get; set; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
         public Dictionary<string, int> Coverage { get; private set; } = new Dictionary<string, int>(OrdinalIgnoreCase);
         public Dictionary<string, string[]> Sources { get; } = new Dictionary<string, string[]>(OrdinalIgnoreCase);
-        public Stack<Structure> StructureStack { get; } = new Stack<Structure>(new[] { new Structure { Name = string.Empty } });
+        public Stack<Structure> StructureStack { get; } = new Stack<Structure>();
 
         private Token _lastToken;
         private List<Optimization> _optimizations = new List<Optimization>();
@@ -251,6 +251,9 @@ namespace ForthCompiler
 
         public void Compile(int? from = null)
         {
+            StructureStack.Clear();
+            StructureStack.Push(new Structure {Name = string.Empty});
+
             for (TokenIndex = from ?? 0; TokenIndex < Tokens.Count; TokenIndex++)
             {
                 if (Token.TokenType == TokenType.Literal)

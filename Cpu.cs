@@ -106,7 +106,7 @@ namespace ForthCompiler
                     break;
                 case OpCode.Sub:
                     add = (ulong)unchecked((uint)_next) + ~unchecked((uint)_top) + 1;
-                    _carry = (int)(add >> 32) & 1;
+                    _carry = 1 - ((int)(add >> 32) & 1);
                     _top = unchecked((int)add);
                     _next = Stack.Pop();
                     break;

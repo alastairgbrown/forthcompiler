@@ -68,7 +68,7 @@ Region \ Return stack operations
     Macro _Drop6_ _RS_ @ 6 - _RS_ ! EndMacro
     
     Optimization _Take1_ _R1_ @ OptimizesTo dup _Take1_ IsLastPass EndOptimization
-    Optimization _Drop1_ _R1_ @ _Drop1_ OptimizesTo _R2_ @ _Drop2_ IsLastPass EndOptimization
+    \ Optimization _Drop1_ _R1_ @ _Drop1_ OptimizesTo _R2_ @ _Drop2_ IsLastPass EndOptimization
     Optimization _Drop2_ _R1_ @ _Drop1_ OptimizesTo _R3_ @ _Drop3_ IsLastPass EndOptimization
     Optimization _Drop3_ _R1_ @ _Drop1_ OptimizesTo _R4_ @ _Drop4_ IsLastPass EndOptimization
     Optimization _Drop4_ _R1_ @ _Drop1_ OptimizesTo _R5_ @ _Drop5_ IsLastPass EndOptimization
@@ -598,7 +598,7 @@ Region \ Optimization test cases
 
     TestCase Macro y EndMacro Macro y Redefine 2 EndMacro y	ProducesCode 2 								         EndTestCase
 	TestCase 0 begin again                              	ProducesCode 0 Label .a Addr .a /jnz EndTestCase
-    TestCase Addr .y [ 1 1 + ] Label .y                 	ProducesCode 4 2                                                                                          EndTestCase
+    TestCase Addr .y [ 1 1 + ] Label .y                 	ProducesCode /psh /_0 /_5 2                                                                               EndTestCase
     TestCase RetI                                       	ProducesCode /Swp /Swp /Jnz                           ( Make sure RetI works                            ) EndTestCase
     TestCase 0 Org 6 Org 1 2 +                          	ProducesCode /_0 /_0 /_0 /_0 /_0 /_0 1 2 +            ( Make sure Org works                             ) EndTestCase
     TestCase 0 Org 6 Org 1 2 + WithCore Macro A 9 EndMacro Prerequisite "+" A 
@@ -608,6 +608,13 @@ Region \ Optimization test cases
     TestCase [ 6 7 * ]                                  	ProducesCode 42                                       ( Make sure MulCode is optimized out              ) EndTestCase
     TestCase 5 3 *                                      	ProducesCode 5 Dup Dup + +                            ( Make sure 3 * is optimized                      ) EndTestCase
     TestCase 5 3 LShift                                 	ProducesCode 5 Dup + Dup + Dup +                      ( Make sure 3 LShift is optimized                 ) EndTestCase
+    
+	\ TestCase 
+		\ : a ; : b ;                					
+	\ ProducesCode 
+		\ addr .x /jnz >R R> /jnz >R R> /jnz label .x 1    \ Make sure jump Optimization works
+	\ EndTestCase
+	
     TestCase 1 addr .b /jnz 2 label .b 3                	ProducesCode 1 addr .b /jnz label .b 3                ( Make sure jump Optimization works               ) EndTestCase
     TestCase : ExitTest 11 Exit 22 ; ExitTest           	ProducesCode : ExitTest 11 Exit ; ExitTest            ( Make sure unreachable code Optimization works   ) EndTestCase
     TestCase : TestOptimize2 _Take2_ _R1_ @ 2 * _R2_ @ 3 * + _Drop2_ ;                                        (                                                 ) EndTestCase
