@@ -324,7 +324,6 @@ namespace ForthCompiler
                         FontStyle = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).FontStyle,
                         TextDecorations = (SyntaxStyle.Keywords.At(w) ?? SyntaxStyle.Default).TextDecoration,
                         ToolTip = Compiler.Doc.At(w)
-
                     }));
                 Status.Text = "";
                 CommandLineTokens.Content = null;

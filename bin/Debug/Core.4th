@@ -591,6 +591,7 @@ Region \ Exception test cases
     TestCase [                                   ProducesException "Missing ]"                                EndTestCase
     TestCase [                                   ProducesException "Missing ]"                                EndTestCase
     TestCase 1 Org 0 Org                         ProducesException "Org value decreasing from 1 to 0"         EndTestCase
+    TestCase Macro y EndMacro Undefine y : y ;   ProducesException ""          								  EndTestCase
 
 EndRegion
 

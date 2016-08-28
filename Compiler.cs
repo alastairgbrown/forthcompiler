@@ -667,6 +667,11 @@ namespace ForthCompiler
             Doc[_argValues[0].Dequote()] = tokens.ToDoc();
         }
 
+        [InternalMethod(Arguments = 1, Doc = "Undefines word - usage: UNDEFINE Word")]
+        private void Undefine()
+        {
+            Words.Remove(_argValues[0].Dequote());
+        }
 
         [InternalMethod(Doc = "Defines peephole Optimization - usage: OPTIMIZATION UnoptimisedCode OPTIMIZESTO OptimisedCode [ ISLASTPASS ] OPTIMIZATION")]
         public void Optimization()
