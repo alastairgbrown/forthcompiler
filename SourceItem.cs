@@ -14,11 +14,11 @@ namespace ForthCompiler
 
         public Compiler Compiler => Parent.Compiler;
         public List<Token> Tokens { get; set; } = new List<Token>();
-        public int CodeIndex => Tokens.FirstOrDefault()?.CodeIndex ?? 0;
-        public int CodeCount => (Tokens.LastOrDefault()?.CodeIndex - 
+        public long CodeIndex => Tokens.FirstOrDefault()?.CodeIndex ?? 0;
+        public long CodeCount => (Tokens.LastOrDefault()?.CodeIndex - 
                                  Tokens.FirstOrDefault()?.CodeIndex + Tokens.LastOrDefault()?.CodeCount) ?? 0;
 
-        private int[] _originalCodeCounts;
+        private long[] _originalCodeCounts;
 
         public bool Break { get; set; }
 
@@ -73,7 +73,7 @@ namespace ForthCompiler
 
                     for (var i = token.CodeIndex; Parent.ShowAsm.IsChecked && i < token.CodeIndex + token.CodeCount; i++)
                     {
-                        var codeslot = Parent.Compiler.CodeSlots[i];
+                        var codeslot = Parent.Compiler.CodeSlots[(int)i];
 
                         if (codeslot == null)
                             continue;

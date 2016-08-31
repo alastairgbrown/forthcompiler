@@ -6,7 +6,7 @@ namespace ForthCompiler
     {
         public string Name { get; set; }
 
-        public int Address { get; set; }
+        public long Address { get; set; }
 
         public bool WasChanged { get; set; }
 

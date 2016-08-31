@@ -131,7 +131,7 @@ namespace ForthCompiler
             return stack.Pop();
         }
 
-        public static bool Contains([NotNull]this ISlotRange token, int slot)
+        public static bool Contains([NotNull]this ISlotRange token, long slot)
         {
             return slot >= token.CodeIndex && slot < token.CodeIndex + token.CodeCount;
         }
@@ -201,11 +201,11 @@ namespace ForthCompiler
             return (value / 8) * 6 + (value % 8);
         }
 
-        public static IEnumerable<CodeSlot> ToPfx(this int value, int? length = null)
+        public static IEnumerable<CodeSlot> ToPfx(this long value, int? length = null)
         {
-            var twosComp = unchecked((uint)value);
+            var twosComp = unchecked((ulong)value);
             var codes = Range(0, 8).Select(i => (twosComp >> ((7 - i) * 4)) & 0xF).ToArray();
-            var msbit = Range(1, 31).Reverse().FirstOrDefault(i => ((twosComp >> i) & 1) != (value < 0 ? 1 : 0));
+            var msbit = Range(1, 31).Reverse().FirstOrDefault(i => ((twosComp >> i) & 1) != (value < 0 ? 1ul : 0));
             var needed = length ?? ((msbit + 5) / 4);
 
             return codes.Skip(codes.Length - needed).Select(c => (CodeSlot)(OpCode)((int)OpCode._0 + c));

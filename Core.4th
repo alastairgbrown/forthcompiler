@@ -34,8 +34,11 @@ EndRegion
 
 Region \ Return stack operations
     Macro ReturnStackCode \ Prerequisite code for return stack operations
+		Label .PlaceHolder
         Variable _RS_ \ A pointer to the top of the return stack
         32 Allot _RS_ _RS_ ! 
+		:: >R swap _RS_ @ 1 + _RS_ /Stw /Pop /Stw /Pop /Pop ;;
+		:: R> R@ _RS_ @ 1 - _RS_ ! swap ;;
     EndMacro
 
     Macro LoopStackCode \ Prerequisite code for loops
@@ -43,8 +46,6 @@ Region \ Return stack operations
     EndMacro
 
 	Macro R@ _RS_ @ @ EndMacro
-	Macro >R _RS_ @ 1 + _RS_ /Stw /Pop /Stw /Pop /Pop  EndMacro
-	Macro R> R@ _RS_ @ 1 - _RS_ ! EndMacro
 	Prerequisite R@ ReturnStackCode
 	Prerequisite >R ReturnStackCode
 	Prerequisite R> ReturnStackCode
@@ -54,8 +55,7 @@ Region \ Return stack operations
     Macro _R3_    _RS_ @ 2 - EndMacro
     Macro _R4_    _RS_ @ 3 - EndMacro
     Macro _R5_    _RS_ @ 4 - EndMacro
-    Macro _R6_    _RS_ @ 5 - EndMacro
-    Macro _Take1_ _RS_ @ 1 + _RS_ ! _R1_ ! EndMacro
+    Macro _Take1_ >R EndMacro
     Macro _Take2_ _RS_ @ 2 + _RS_ ! _R2_ ! _R1_ ! EndMacro
     Macro _Take3_ _RS_ @ 3 + _RS_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
     Macro _Take4_ _RS_ @ 4 + _RS_ ! _R4_ ! _R3_ ! _R2_ ! _R1_ ! EndMacro
@@ -65,14 +65,8 @@ Region \ Return stack operations
     Macro _Drop3_ _RS_ @ 3 - _RS_ ! EndMacro
     Macro _Drop4_ _RS_ @ 4 - _RS_ ! EndMacro
     Macro _Drop5_ _RS_ @ 5 - _RS_ ! EndMacro
-    Macro _Drop6_ _RS_ @ 6 - _RS_ ! EndMacro
     
-    Optimization _Take1_ _R1_ @ OptimizesTo dup _Take1_ IsLastPass EndOptimization
-    \ Optimization _Drop1_ _R1_ @ _Drop1_ OptimizesTo _R2_ @ _Drop2_ IsLastPass EndOptimization
-    Optimization _Drop2_ _R1_ @ _Drop1_ OptimizesTo _R3_ @ _Drop3_ IsLastPass EndOptimization
-    Optimization _Drop3_ _R1_ @ _Drop1_ OptimizesTo _R4_ @ _Drop4_ IsLastPass EndOptimization
-    Optimization _Drop4_ _R1_ @ _Drop1_ OptimizesTo _R5_ @ _Drop5_ IsLastPass EndOptimization
-    Optimization _Drop5_ _R1_ @ _Drop1_ OptimizesTo _R6_ @ _Drop6_ IsLastPass EndOptimization
+    Optimization >R R@ OptimizesTo dup >R IsLastPass EndOptimization
     Optimization _R1_ @ Drop OptimizesTo  EndOptimization
     
 EndRegion
@@ -115,12 +109,20 @@ Region \ Math operators
 
     Macro + ( x y -- x+y ) /Add EndMacro
     TestCase 1 1 + Produces 2 EndTestCase
+    TestCase 1 -1 + Produces 0 EndTestCase
+    TestCase 0 -1 + Produces -1 EndTestCase
 
     Macro - ( x y -- x-y ) /Sub EndMacro
     TestCase 1 1 - Produces 0 EndTestCase
     TestCase 0 1 - Produces -1 EndTestCase
     TestCase 4 2 - Produces 2 EndTestCase
         
+    Macro PushC 0 0 /Adc EndMacro
+    TestCase -1 -1 + drop PushC Produces 1 EndTestCase
+    
+    Macro PopC /Lsr /Pop EndMacro
+    TestCase 1 PopC 0 0 /Adc Produces 1 EndTestCase
+		
     Macro * /Mlt EndMacro
 
     Optimization 0 * OptimizesTo Drop 0 EndOptimization
@@ -338,12 +340,6 @@ Region \ Math operators
 EndRegion
 
 Region \ stack operations
-
-    Macro PushC 0 0 /Adc EndMacro
-    TestCase -1 -1 + drop PushC Produces 1 EndTestCase
-    
-    Macro PopC /Lsr /Pop EndMacro
-    TestCase 1 PopC 0 0 /Adc Produces 1 EndTestCase
     
     Macro RetI /Swp /Swp /Jnz EndMacro
     
@@ -609,6 +605,7 @@ Region \ Optimization test cases
     TestCase [ 6 7 * ]                                  	ProducesCode 42                                       ( Make sure MulCode is optimized out              ) EndTestCase
     TestCase 5 3 *                                      	ProducesCode 5 Dup Dup + +                            ( Make sure 3 * is optimized                      ) EndTestCase
     TestCase 5 3 LShift                                 	ProducesCode 5 Dup + Dup + Dup +                      ( Make sure 3 LShift is optimized                 ) EndTestCase
+	
     
 	\ TestCase 
 		\ : a ; : b ;                					
@@ -627,7 +624,14 @@ EndRegion
 
 Region \ MIF test cases
 
-    TestCase 0 ProducesMif "0000 : 00000012;" EndTestCase
-    TestCase 1 ProducesMif "0000 : 00000032;" EndTestCase
+    TestCase /stw /stw /stw	/stw /stw /stw	ProducesMif "0000 : 0CA86420;" EndTestCase
+	TestCase 
+		16 Constant .Opcode_Word_Size
+		8 Constant .Opcode_Instruction_Size
+		2 Constant .Opcode_Instructions_Per_Word
+		2 Constant .Opcode_Sub_Word_Slot_Bits
+		/stw /stw	ProducesMif "0000 : 2020;" EndTestCase
+    TestCase 0	ProducesMif "0000 : 00000012;" EndTestCase
+    TestCase 1	ProducesMif "0000 : 00000032;" EndTestCase
     
 EndRegion

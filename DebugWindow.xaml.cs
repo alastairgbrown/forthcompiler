@@ -23,9 +23,9 @@ namespace ForthCompiler
         public Compiler Compiler { get; }
 
         public Cpu Cpu { get; set; }
-        public int ProgramIndex { get; set; }
+        public long ProgramIndex { get; set; }
 
-        private HashSet<int> _breaks;
+        private HashSet<long> _breaks;
         private readonly int _codeOrig;
         private readonly int _compOrig;
         private readonly int _tokenOrig;
@@ -65,7 +65,7 @@ namespace ForthCompiler
 
             if (error != null)
             {
-                Cpu = new Cpu(Compiler.CodeSlots);
+                Cpu = new Cpu(Compiler.CodeSlots,Compiler.Architecture);
                 ProgramIndex = (Compiler.ArgToken?.CodeIndex ?? 1) - 1;
                 Refresh();
                 CpuStatus.Inlines.Clear();
@@ -109,7 +109,7 @@ namespace ForthCompiler
                 item.Refresh();
             }
 
-            var addresses = new HashSet<int>(HeapItems.Select(hi => hi.Address));
+            var addresses = new HashSet<long>(HeapItems.Select(hi => hi.Address));
             HeapItems.AddRange(Cpu.Heap.Keys.Where(a => !addresses.Contains(a)).Select(a => new HeapItem { Parent = this, Address = a }));
             HeapItems.Sort((a, b) => a.Address.CompareTo(b.Address));
 
@@ -135,14 +135,14 @@ namespace ForthCompiler
             }
         }
 
-        public string FormatNumber(int i)
+        public string FormatNumber(long i)
         {
             return ShowHex.IsChecked ? $"${i:X}" : $"{i}";
         }
 
-        public string FormatAddress(int address)
+        public string FormatAddress(long address)
         {
-            return $"{FormatNumber(address)}/{address.ToAddressAndSlot():X}";
+            return $"{FormatNumber(address)}/{Compiler.Architecture.ToAddressAndSubWordSlot(address):X}";
         }
 
         private void Run(Func<bool> breakCondition)
@@ -155,7 +155,7 @@ namespace ForthCompiler
                 _commandLines.Add(CommandLine.Text);
             }
 
-            _breaks = new HashSet<int>(SourceItems.Where(i => i.Break).Select(i => i.CodeIndex));
+            _breaks = new HashSet<long>(SourceItems.Where(i => i.Break).Select(i => i.CodeIndex));
             Cpu.Run(breakCondition);
 
             ProgramIndex = Cpu.ProgramIndex;
@@ -208,7 +208,7 @@ namespace ForthCompiler
             Compiler.Compilation.SetCount(_compOrig);
             Compiler.CodeSlots.SetCount(_codeOrig);
             CommandLine.Text = "";
-            Cpu = new Cpu(Compiler.CodeSlots);
+            Cpu = new Cpu(Compiler.CodeSlots, Compiler.Architecture);
             ProgramIndex = 0;
 
             HeapItems.Clear();
@@ -229,7 +229,7 @@ namespace ForthCompiler
 
             foreach (var test in tests.Where(t => t.IsTestCase))
             {
-                Cpu = new Cpu(Compiler.CodeSlots) { ProgramIndex = test.CodeIndex };
+                Cpu = new Cpu(Compiler.CodeSlots, Compiler.Architecture) { ProgramIndex = test.CodeIndex };
                 Cpu.Run(() => Cpu.ProgramIndex >= test.CodeIndex + test.CodeCount);
 
                 var stack = Cpu.ForthStack.ToArray();
@@ -241,8 +241,8 @@ namespace ForthCompiler
                 }
                 else
                 {
-                    var actual = string.Join(" ", stack.Skip(1 + stack.First()).Reverse());
-                    var expected = string.Join(" ", stack.Skip(1).Take(stack.First()).Reverse());
+                    var actual = string.Join(" ", stack.Skip(1 + (int)stack.First()).Reverse());
+                    var expected = string.Join(" ", stack.Skip(1).Take((int)stack.First()).Reverse());
 
                     result = actual == expected ? "PASS" : "FAIL";
                     test.TestResult = $"{result} expected={expected} actual={actual}";

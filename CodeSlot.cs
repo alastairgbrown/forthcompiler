@@ -4,9 +4,9 @@ namespace ForthCompiler
 {
     public class CodeSlot
     {
-        public int CodeIndex { get; set; }
+        public long CodeIndex { get; set; }
         public OpCode OpCode { get; set; }
-        public int Value { get; set; }
+        public long Value { get; set; }
         public string Label { get; set; }
 
         public static implicit operator CodeSlot(OpCode opCode)
@@ -14,7 +14,7 @@ namespace ForthCompiler
             return new CodeSlot { OpCode = opCode };
         }
 
-        public static implicit operator CodeSlot(int value)
+        public static implicit operator CodeSlot(long value)
         {
             return new CodeSlot { OpCode = OpCode.Literal, Value = value };
         }

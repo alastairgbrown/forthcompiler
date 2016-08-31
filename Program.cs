@@ -6,71 +6,6 @@ using System.Reflection;
 using static System.Linq.Enumerable;
 using static System.StringComparer;
 
-/*
-valid opcodes (5 bit)
-1xxxx pfx xxxx
-00000 nop = no operation (may not be needed)
-00001 ldw = load word : top <=mem(top)
-00010 stw = store word : mem(top)<=next
-00011 psh = push : mem(sp+1)<=next; next<=top; sp++;
-00100 pop = pop : top<=next; next<=mem(sp); sp--;
-00101 swp = swap : top <=>next;
-00110 jnz = jump top not zero : if (top!=0) { pc=top>>3; slot=top&0x7; } pop;
-00111 cnz = call top not zero : if (top!=0) { {pc,slot} <=> top; } else pop;
-
-01000 adc = add with carry : next<=next+top+c; (c modified with result)
-01001 add = add : next<=next+top; (c modified)
-01010 sub = subtract : next<=next+!top+1; (c modified)
-01011 and = and : next<=next&top;
-01100 xor = xor : next<=next^top;
-01101 lsr = logic shift right : next <= top >> 1; (c modified)
-01110 zeq = equal zero : next <= (top == 0) ? 0xffffff... : 0x0;
-01111 --- not used (yet)
-
-( forth comment )
-variable n
-10 n !
-begin
-	n @ 0<>
-while
-	1 2 + drop
-	n @ 1 - n !
-repeat
-
-	psh 0xa {macro}
-lbl L0
-	pfx n {macro}
-	ldw
-	neq 0 {macro}
-	jpz L0R   {macro}
-	psh 1 {macro}
-	psh 2 {macro}
-	add
-	pop
-	psh n {macro}
-	ldw
-	psh 1 {macro}
-	sub
-	pfx n {macro}
-	stw
-	jp L0 {macro}
-lbl L0R
-
-                    compiler.ReadFile(0, "test", y => y + 1, x => x, new[] {
-                    "( forth comment )",
-                    "variable n",
-                    "[ 5 5 + ] n !",
-                    "begin",
-                    "    n @ 0<>",
-                    "while",
-                    "    1 2 + drop",
-                    "    n @ 1 - n !",
-                    "repeat",
-                    "1 0 < drop",
-                    "0 1 < drop",
-                    "1 1 < drop"});
-
-*/
 
 // ReSharper disable UnusedMember.Local
 
@@ -83,7 +18,7 @@ namespace ForthCompiler
         {
             var argMap = Range(0, args.Length)
                              .Where(i => args[i].StartsWith("-"))
-                             .ToDictionary(i => args[i], i => i + 1 < args.Length ? args[i + 1] : null, OrdinalIgnoreCase);
+                             .ToDictionary(i => args[i], i => args.Skip(i+1).TakeWhile(a => !a.StartsWith("-")).ToArray(), OrdinalIgnoreCase);
             var compiler = new Compiler();
             var error = (string)null;
 
@@ -129,7 +64,7 @@ namespace ForthCompiler
                 var name = Assembly.GetExecutingAssembly().GetName().Name;
                 Console.WriteLine();
                 Console.WriteLine($"Usage:");
-                Console.WriteLine($"   {name} [-f filename | -testcases] [-mif mifFilename] [-debug]");
+                Console.WriteLine($"   {name} [-f filename | -testcases] [-mif mifFilename] [-hex hexFilename] [-debug]");
             }
 
             if (argMap.ContainsKey("-debug"))
@@ -138,39 +73,44 @@ namespace ForthCompiler
             }
         }
 
-        public static void Compile(Compiler compiler, Dictionary<string, string> argMap)
+        public static void Compile(Compiler compiler, Dictionary<string, string[]> argMap)
         {
             compiler.LoadCore();
 
-            if (argMap.ContainsKey("-f"))
+            if (argMap.At("-f")?.Length == 1)
             {
-                compiler.ReadFile(0, argMap["-f"], y => y, x => x, File.ReadAllLines(argMap["-f"]));
+                compiler.ReadFile(0, argMap["-f"].Single(), y => y, x => x, File.ReadAllLines(argMap["-f"].Single()));
             }
             else if (argMap.ContainsKey("-testcases"))
             {
                 compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.GenerateTestCases().ToArray());
             }
 
-            compiler.Precompile();
+            compiler.PreCompile();
             compiler.Compile();
-            compiler.Optimize(!argMap.ContainsKey("-nooptimize"));
+
+            if (!argMap.ContainsKey("-nooptimize"))
+            {
+                compiler.Optimize();
+            }
+
             compiler.PostCompile();
 
             if (argMap.ContainsKey("-testcases"))
             {
-                compiler.CoverageReport();
+                compiler.GenerateCoverageTestCases();
             }
 
-            if (argMap.ContainsKey("-mif"))
+            if (argMap.At("-mif")?.Length == 1)
             {
-                File.WriteAllLines(argMap["-mif"], compiler.GenerateMif());
-                Console.WriteLine($"Generated: {argMap["-mif"]}");
+                File.WriteAllLines(argMap["-mif"].Single(), compiler.GenerateMif());
+                Console.WriteLine($"Generated: {argMap["-mif"].Single()}");
             }
 
-            if (argMap.ContainsKey("-hex"))
+            if (argMap.At("-hex")?.Length == 1)
             {
-                File.WriteAllLines(argMap["-hex"], compiler.GenerateHex());
-                Console.WriteLine($"Generated: {argMap["-hex"]}");
+                File.WriteAllLines(argMap["-hex"].Single(), compiler.GenerateHex());
+                Console.WriteLine($"Generated: {argMap["-hex"].Single()}");
             }
         }
     }
@@ -230,7 +170,7 @@ namespace ForthCompiler
 
     public interface ISlotRange
     {
-        int CodeIndex { get; }
-        int CodeCount { get; }
+        long CodeIndex { get; }
+        long CodeCount { get; }
     }
 }

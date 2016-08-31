@@ -30,8 +30,8 @@ namespace ForthCompiler
         public string Text { get; }
         public TokenType TokenType { get; set; }
         public CodeSlot CodeSlot { get; set; }
-        public int CodeIndex { get; set; }
-        public int CodeCount { get; set; }
+        public long CodeIndex { get; set; }
+        public long CodeCount { get; set; }
 
         public bool IsExcluded => TokenType == TokenType.Excluded;
         public bool IsDocumentation => TokenType == TokenType.Excluded && Text.Trim() != "";

@@ -10,7 +10,8 @@ namespace ForthCompiler
 
     public class Variable : IDictEntry
     {
-        public int HeapAddress { get; set; }
+        public long HeapAddress { get; set; }
+
         public void Process(Compiler compiler)
         {
             compiler.Token.TokenType = TokenType.Variable;
@@ -28,7 +29,7 @@ namespace ForthCompiler
             compiler.Encode(Value);
         }
 
-        public int Value { get; set; }
+        public long Value { get; set; }
     }
 
     public class Definition : IDictEntry

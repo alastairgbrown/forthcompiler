@@ -9,26 +9,28 @@ namespace ForthCompiler
 {
     public class Cpu
     {
-        public int ProgramIndex { get; set; }
-        public SortedDictionary<int, int> Heap { get; } = new SortedDictionary<int, int>();
-        public Dictionary<int, int> LastHeap { get; set; } = new Dictionary<int, int>();
-        public Stack<int> Stack { get; } = new Stack<int>();
-        public IEnumerable<int> ForthStack => new[] { _top, _next }.Concat(Stack).Take(Stack.Count);
+        public long ProgramIndex { get; set; }
+        public SortedDictionary<long, long> Heap { get; } = new SortedDictionary<long, long>();
+        public Dictionary<long, long> LastHeap { get; set; } = new Dictionary<long, long>();
+        public Stack<long> Stack { get; } = new Stack<long>();
+        public IEnumerable<long> ForthStack => new[] { _top, _next }.Concat(Stack).Take(Stack.Count);
         public Stack<Structure> CallStack { get; } = new Stack<Structure>();
 
-        private int _top;
-        private int _next;
+        private long _top;
+        private long _next;
         private int _carry;
         private bool _loadingPfx;
         private string _error;
         public object[] LastState { get; private set; }
         private readonly List<CodeSlot> _codeslots;
-        private readonly Dictionary<int, string> _definitions;
+        private readonly Architecture _architecture;
+        private readonly Dictionary<long, string> _definitions;
         private readonly Dictionary<string, int> _labels;
 
-        public Cpu(List<CodeSlot> codeSlots)
+        public Cpu(List<CodeSlot> codeSlots, Architecture architecture)
         {
             _codeslots = codeSlots;
+            _architecture = architecture;
             _definitions = _codeslots.Where(cs => cs?.Label?.StartsWith(".") == true)
                                      .GroupBy(cs => cs.CodeIndex)
                                      .ToDictionary(cs => cs.Key, cs => cs.First().Label);
@@ -57,8 +59,8 @@ namespace ForthCompiler
                 throw new Exception("Outside executable code");
             }
 
-            var code = _codeslots[ProgramIndex++];
-            ulong add;
+            var code = _codeslots[(int)(ProgramIndex++)];
+            long add;
 
             switch (code.OpCode)
             {
@@ -82,32 +84,41 @@ namespace ForthCompiler
                 case OpCode.Jnz:
                     if (_top != 0)
                     {
-                        ProgramIndex = _top.ToCodeIndex();
+                        ProgramIndex = _architecture.ToCodeIndex(_top);
                     }
                     _top = _next;
                     _next = Stack.Pop();
                     break;
                 case OpCode.Jsr:
-                    var temp = ProgramIndex.ToAddressAndSlot();
-                    ProgramIndex = _top.ToCodeIndex();
+                    var temp = _architecture.ToAddressAndSubWordSlot(ProgramIndex);
+                    ProgramIndex = _architecture.ToCodeIndex(_top);
                     _top = temp;
                     break;
                 case OpCode.Add:
-                    add = (ulong)unchecked((uint)_next) + unchecked((uint)_top);
-                    _carry = (int)(add >> 32) & 1;
-                    _top = unchecked((int)add);
+                    _top = _top >= 0 ? _top : _architecture.DataPathCarryBit + _top;
+                    _next = _next >= 0 ? _next : _architecture.DataPathCarryBit + _next;
+                    add = _next + _top;
+                    _top = add & _architecture.DataPathMask;
+                    _top = (add & _architecture.DataPathMsBit) == 0 ? _top : -(_architecture.DataPathCarryBit - _top);
+                    _carry = (add & _architecture.DataPathCarryBit) == 0 ? 0 : 1;
                     _next = Stack.Pop();
                     break;
                 case OpCode.Adc:
-                    add = (ulong)unchecked((uint)_next) + unchecked((uint)_top) + (uint)_carry;
-                    _carry = (int)(add >> 32) & 1;
-                    _top = unchecked((int)add);
+                    _top = _top >= 0 ? _top : _architecture.DataPathCarryBit + _top;
+                    _next = _next >= 0 ? _next : _architecture.DataPathCarryBit + _next;
+                    add = _next + _top + _carry;
+                    _top = add & _architecture.DataPathMask;
+                    _top = (add & _architecture.DataPathMsBit) == 0 ? _top : -(_architecture.DataPathCarryBit - _top);
+                    _carry = (add & _architecture.DataPathCarryBit) == 0 ? 0 : 1;
                     _next = Stack.Pop();
                     break;
                 case OpCode.Sub:
-                    add = (ulong)unchecked((uint)_next) + ~unchecked((uint)_top) + 1;
-                    _carry = 1 - ((int)(add >> 32) & 1);
-                    _top = unchecked((int)add);
+                    _top = _top >= 0 ? _top : _architecture.DataPathCarryBit + _top;
+                    _next = _next >= 0 ? _next : _architecture.DataPathCarryBit + _next;
+                    add = _next + ~_top + 1;
+                    _top = add & _architecture.DataPathMask;
+                    _top = (add & _architecture.DataPathMsBit) == 0 ? _top : -(_architecture.DataPathCarryBit - _top);
+                    _carry = (add & _architecture.DataPathCarryBit) == 0 ? 0 : 1;
                     _next = Stack.Pop();
                     break;
                 case OpCode.And:
@@ -127,7 +138,7 @@ namespace ForthCompiler
                     _next = Stack.Pop();
                     break;
                 case OpCode.Lsr:
-                    _carry = _top & 1;
+                    _carry = (int)(_top & 1);
                     _top = _top >> 1;
                     break;
                 case OpCode.Zeq:
@@ -138,7 +149,7 @@ namespace ForthCompiler
                     break;
                 case OpCode.Address:
                     _labels.ContainsKey(code.Label).Validate(a => $"Missing {code.Label}", v => v);
-                    _top = _labels[code.Label].ToAddressAndSlot();
+                    _top = _architecture.ToAddressAndSubWordSlot(_labels[code.Label]);
                     break;
                 default:
                     if ((int)code.OpCode >= 0x0 && (int)code.OpCode <= 0xF)
@@ -147,7 +158,7 @@ namespace ForthCompiler
                         {
                             _top = (int)code.OpCode >= 0x8 ? -1 : 0;
                         }
-                        _top = (_top << 4) | (int)code.OpCode;
+                        _top = (_top << 4) | (long)code.OpCode;
                     }
                     break;
             }
@@ -179,9 +190,9 @@ namespace ForthCompiler
                     break;
                 }
 
-                if (_codeslots[lastSlot].OpCode == OpCode.Jsr && _definitions.ContainsKey(ProgramIndex))
+                if (_codeslots[(int)lastSlot].OpCode == OpCode.Jsr && _definitions.ContainsKey(ProgramIndex))
                 {
-                    CallStack.Peek().Value = _top.ToCodeIndex();
+                    CallStack.Peek().Value = _architecture.ToCodeIndex(_top);
                     CallStack.Push(new Structure { Name = _definitions[ProgramIndex] });
                 }
                 else if (CallStack.Count >= 2 && ProgramIndex == CallStack.Skip(1).First().Value)
