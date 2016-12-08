@@ -11,7 +11,7 @@ using static System.StringComparer;
 
 namespace ForthCompiler
 {
-    internal class Program
+    internal static class Program
     {
         [STAThread]
         private static void Main(string[] args)
@@ -21,11 +21,6 @@ namespace ForthCompiler
                              .ToDictionary(i => args[i], i => args.Skip(i+1).TakeWhile(a => !a.StartsWith("-")).ToArray(), OrdinalIgnoreCase);
             var compiler = new Compiler();
             var error = (string)null;
-
-            if (!argMap.Any())
-            {
-                argMap["-testcases"] = argMap["-debug"] = null;
-            }
 
             if (argMap.ContainsKey("-nocatch"))
             {
@@ -41,7 +36,7 @@ namespace ForthCompiler
                 {
                     var pos = compiler.ArgToken;
 
-                    if (pos == null)
+                    if (pos == null || !compiler.Sources.ContainsKey(pos.File) || compiler.Sources[pos.File].Length <= pos.Y)
                     {
                         error = $"Error: {ex.Message}";
                     }
@@ -64,12 +59,12 @@ namespace ForthCompiler
                 var name = Assembly.GetExecutingAssembly().GetName().Name;
                 Console.WriteLine();
                 Console.WriteLine($"Usage:");
-                Console.WriteLine($"   {name} [-f filename | -testcases] [-mif mifFilename] [-hex hexFilename] [-debug]");
+                Console.WriteLine($"   {name} [-f filename] [-mif mifFilename] [-hex hexFilename] [-debug]");
             }
 
-            if (argMap.ContainsKey("-debug"))
+            if (argMap.ContainsKey("-debug") || argMap.FileName() == null)
             {
-                new DebugWindow(compiler, argMap.ContainsKey("-testcases"), error).ShowDialog();
+                new DebugWindow(compiler, argMap.FileName() == null, error).ShowDialog();
             }
         }
 
@@ -77,13 +72,13 @@ namespace ForthCompiler
         {
             compiler.LoadCore();
 
-            if (argMap.At("-f")?.Length == 1)
-            {
-                compiler.ReadFile(0, argMap["-f"].Single(), y => y, x => x, File.ReadAllLines(argMap["-f"].Single()));
-            }
-            else if (argMap.ContainsKey("-testcases"))
+            if (argMap.FileName() == null)
             {
                 compiler.ReadFile(0, "Test Cases", y => y, x => x, compiler.GenerateTestCases().ToArray());
+            }
+            else
+            {
+                compiler.ReadFile(0, argMap.FileName(), y => y, x => x, File.ReadAllLines(argMap.FileName()));
             }
 
             compiler.PreCompile();
@@ -96,7 +91,7 @@ namespace ForthCompiler
 
             compiler.PostCompile();
 
-            if (argMap.ContainsKey("-testcases"))
+            if (argMap.FileName() == null)
             {
                 compiler.GenerateCoverageTestCases();
             }
@@ -113,48 +108,11 @@ namespace ForthCompiler
                 Console.WriteLine($"Generated: {argMap["-hex"].Single()}");
             }
         }
-    }
 
-    public enum OpCode
-    {
-        NativeStart = -1,
-        _0,
-        _1,
-        _2,
-        _3,
-        _4,
-        _5,
-        _6,
-        _7,
-        _8,
-        _9,
-        _A,
-        _B,
-        _C,
-        _D,
-        _E,
-        _F,
-        Ldw,
-        Stw,
-        Psh,
-        Pop,
-        Swp,
-        Jnz,
-        Jsr,
-        Add,
-        Adc,
-        Sub,
-        And,
-        Ior,
-        Xor,
-        Mlt,
-        Lsr,
-        Zeq,
-        NativeStop,
-        Literal,
-        Label,
-        Address,
-        Org
+        static string FileName(this Dictionary<string, string[]> argMap)
+        {
+            return argMap.At("-f")?.Length == 1 ? argMap.At("-f").Single() : null;
+        }
     }
 
     public enum TokenType
@@ -166,6 +124,7 @@ namespace ForthCompiler
         Variable,
         Definition,
         Error,
+        String
     }
 
     public interface ISlotRange

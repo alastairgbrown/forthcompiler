@@ -24,12 +24,15 @@ namespace ForthCompiler
     {
         public void Process(Compiler compiler)
         {
-            compiler.Token.TokenType = TokenType.Constant;
-            compiler.Encode(OpCode.Psh);
-            compiler.Encode(Value);
+            foreach (var value in Value)
+            {
+                compiler.Token.TokenType = TokenType.Constant;
+                compiler.Encode(OpCode.Psh);
+                compiler.Encode(value);
+            }
         }
 
-        public long Value { get; set; }
+        public long[] Value { get; set; }
     }
 
     public class Definition : IDictEntry

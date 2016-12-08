@@ -13,14 +13,15 @@ namespace ForthCompiler
             MacroLevel = macroLevel;
             TokenType = tokenType ??
                         (Regex.IsMatch(Text, @"^\s*$") ? TokenType.Excluded :
+                         Regex.IsMatch(Text, @"^[Cc.]?""([^""]|"""")*""$") ? TokenType.String :
                          Regex.IsMatch(Text, @"^[#]?-?\d+$") ? TokenType.Literal :
                          Regex.IsMatch(Text, @"^[$][0-9a-fA-F]+$") ? TokenType.Literal :
                          Regex.IsMatch(Text, @"^[%][01]+$") ? TokenType.Literal : TokenType.Undetermined);
         }
 
-        public Token Clone(string text, int macroLevel, TokenType? tokenType = null)
+        public Token Clone(string text, int? macroLevel = null, TokenType? tokenType = null)
         {
-            return new Token(text, File, Y, X, macroLevel, tokenType);
+            return new Token(text, File, Y, X, macroLevel ?? MacroLevel, tokenType);
         }
 
         public int MacroLevel { get; }
@@ -34,7 +35,8 @@ namespace ForthCompiler
         public long CodeCount { get; set; }
 
         public bool IsExcluded => TokenType == TokenType.Excluded;
-        public bool IsDocumentation => TokenType == TokenType.Excluded && Text.Trim() != "";
+        public bool IsDocumentation => TokenType == TokenType.Excluded && !string.IsNullOrWhiteSpace(Text);
+        public string SymbolName => TokenType == TokenType.String || TokenType == TokenType.Literal ?  $"{TokenType}({Regex.Match(Text,@"^[^-\d]")})" : Text;
 
         public override string ToString()
         {

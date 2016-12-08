@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using static System.Enum;
 using static System.Linq.Enumerable;
 using static System.Math;
+using static System.String;
 using static System.StringComparer;
 // ReSharper disable ExplicitCallerInfoArgument
 
@@ -16,14 +18,16 @@ namespace ForthCompiler
     [SuppressMessage("ReSharper", "UnusedParameter.Local")]
     public class Compiler : IEqualityComparer<CodeSlot>
     {
-        private static readonly Regex Parser = new Regex(@"""([^""]|"""")*""|\S+|\s+", RegexOptions.Compiled);
+        private static readonly Regex Parser = new Regex(@"[Cc.]?""([^""]|"""")*""|\S+|\s+", RegexOptions.Compiled);
 
         public List<Token> Tokens { get; } = new List<Token>();
         public int TokenIndex { get; set; }
         public Token Token => TokenIndex < Tokens.Count ? Tokens[TokenIndex] : null;
         public Token ArgToken => _argIndex < Tokens.Count ? Tokens[_argIndex] : null;
         public List<CodeSlot> Compilation { get; } = new List<CodeSlot>();
-        public List<CodeSlot> CodeSlots { get; } = new List<CodeSlot>();
+        public List<long> CodeSlots { get; } = new List<long>();
+        public Dictionary<long, string> Labels { get; } = new Dictionary<long, string>();
+
         public Dictionary<string, string> Doc { get; } = new Dictionary<string, string>(OrdinalIgnoreCase);
         public Dictionary<string, IDictEntry> Words { get; private set; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
         private Dictionary<string, IDictEntry> PrecompileWords { get; set; } = new Dictionary<string, IDictEntry>(OrdinalIgnoreCase);
@@ -42,26 +46,38 @@ namespace ForthCompiler
         private int _commentIndex;
         private int _structureSuffix;
         private readonly List<string> _argValues = new List<string>();
+        private readonly Dictionary<string, string> _countedStrings = new Dictionary<string, string>(Ordinal);
 
         public void LoadCore()
         {
             LoadMethodAttributes();
             LoadCodes();
-            LoadCore4th();
             LoadArchitecture();
+            LoadCore4th();
         }
 
         private void LoadMethodAttributes()
         {
-            foreach (var method in GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                            .Where(m => m.GetCustomAttribute<InternalMethod>() != null))
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+            foreach (var method in GetType().GetMethods(flags).Where(m => m.GetCustomAttribute<InternalMethod>() != null))
             {
                 var attribute = method.GetCustomAttribute<InternalMethod>();
+                var precompile = GetType().GetMethod($"{method.Name}Precompile", flags);
 
                 attribute.Name = attribute.Name ?? method.Name;
                 attribute.Action = (Action)Delegate.CreateDelegate(typeof(Action), this, method);
-                (attribute.IsPrecompile ? PrecompileWords : Words)[attribute.Name] = attribute;
-                Doc[method.Name] = attribute.Doc ?? Doc.At(method.Name);
+                Words[attribute.Name] = attribute;
+                Doc[method.Name] = attribute.Doc;
+
+                if (precompile != null)
+                {
+                    PrecompileWords[attribute.Name] = new InternalMethod
+                    {
+                        Action = (Action)Delegate.CreateDelegate(typeof(Action), this, precompile),
+                        Arguments = attribute.Arguments
+                    };
+                }
             }
         }
 
@@ -69,17 +85,17 @@ namespace ForthCompiler
         {
             foreach (var prop in Architecture.GetProperties())
             {
-                Words[prop.Key] = new Constant { Value = (long)prop.Value.GetValue(Architecture) };
+                Words[prop.Key] = new Constant { Value = prop.Value.Get() };
+                Doc[prop.Key] = prop.Value.Doc;
             }
         }
 
         private void LoadCodes()
         {
-            foreach (var opcode in GetValues(typeof(OpCode)).OfType<OpCode>()
-                                  .Where(c => (int)c > (int)OpCode.NativeStart && (int)c < (int)OpCode.NativeStop))
+            foreach (var opcode in GetValues(typeof(OpCode)).OfType<OpCode>())
             {
                 Words.Add($"/{opcode}", new RawOpCode { OpCode = opcode });
-                Doc[$"/{opcode}"] = $"Inserts raw assembly code for {opcode}";
+                Doc[$"/{opcode}"] = $"Inserts symbol for {opcode}";
             }
         }
 
@@ -120,7 +136,7 @@ namespace ForthCompiler
             for (var index = 0; index < depth; index++)
             {
                 var code = Range(0, Min(instrPerWord, CodeSlots.Count - index * instrPerWord))
-                               .Sum(i => (int)CodeSlots[index * instrPerWord + i].OpCode << (i * instrSize));
+                               .Sum(i => (CodeSlots[index * instrPerWord + i] << (i * instrSize)));
                 var hex = Convert.ToString(code, 16).ToUpper().PadLeft(opcodeDigits, '0');
 
                 yield return mif ? $"{index:X4} : {hex};" : $"{hex}";
@@ -129,11 +145,11 @@ namespace ForthCompiler
             if (mif)
             {
                 yield return "";
-                yield return "END";
+                yield return "END;";
             }
         }
 
-        private Compiler GenerateCompiler(IEnumerable<Token> code, IEnumerable<Token> core = null)
+        private Compiler GenerateCompiler(IEnumerable<Token> code, IEnumerable<Token> core = null, bool optimize = false)
         {
             var compiler = new Compiler
             {
@@ -146,11 +162,10 @@ namespace ForthCompiler
             compiler.Words.Values.OfType<Macro>().ForEach(m => m.Prereqs = null);
             compiler.LoadMethodAttributes();
             compiler.LoadCore4th(core?.ToText() ?? "");
-            compiler.LoadArchitecture();
             compiler.ReadFile(0, "TestCase", x => 0, y => 0, code.ToText());
             compiler.PreCompile();
             compiler.Compile();
-            compiler.Optimize();
+            (optimize ? compiler : null)?.Optimize();
             compiler.PostCompile();
             return compiler;
         }
@@ -166,32 +181,40 @@ namespace ForthCompiler
 
             foreach (var testcase in _testCases)
             {
-                var startTC = DateTime.Now;
-                var dict = testcase.ToDict("TestCase", "Produces", "ProducesException", "ProducesCode", "ProducesMif", "WithCore");
+                var dict = testcase.ToDict("TestCase", "WithCore", "WithInput", "WithOptimization",
+                                           "Produces", "ProducesOutput", "ProducesException", "ProducesCode", "ProducesMif");
 
                 if (dict.ContainsKey("Produces"))
                 {
-                    yield return $"( TestCase ) {dict["TestCase"].ToText()} ( Produces ) {dict["Produces"].ToText()} ( ) {dict["Produces"].Count(t => !t.IsExcluded)}";
+                    yield return $"( TestCase ) {dict["TestCase"].ToText()} " +
+                                 $"( Produces ) {dict["Produces"].ToText()} ( ) {dict["Produces"].Count(t => !t.IsExcluded)}";
+                }
+                else if (dict.ContainsKey("ProducesOutput"))
+                {
+                    yield return $@"( TestCase ) " +
+                                 $@".""Actual:"" {dict["TestCase"].ToText()} " +
+                                 $@".""Expected:"" {dict["ProducesOutput"].ToText()} " +
+                                 $@".""Input:"" {dict.At("WithInput")?.ToText()}";
                 }
                 else if (dict.ContainsKey("ProducesException") || dict.ContainsKey("ProducesCode") || dict.ContainsKey("ProducesMif"))
                 {
                     var values = dict.ToDictionary(d => d.Key, d => d.Value.ToText());
                     var actual = string.Empty;
-                    var required = dict.At("ProducesException")?.ToText() ?? dict.At("ProducesMif")?.ToText();
+                    var expected = (dict.At("ProducesException") ?? dict.At("ProducesMif"))?.ToText();
 
                     try
                     {
-                        var compiler = template.GenerateCompiler(dict["TestCase"], dict.At("WithCore"));
+                        var compiler = template.GenerateCompiler(dict["TestCase"], dict.At("WithCore"), dict.ContainsKey("WithOptimization"));
 
                         if (dict.ContainsKey("ProducesCode"))
                         {
-                            actual = string.Join(null, compiler.CodeSlots.Select(cs => cs.OpCode));
-                            required = string.Join(null, template.GenerateCompiler(dict["ProducesCode"]).CodeSlots.Select(cs => cs.OpCode));
+                            actual = Join(",", compiler.CodeSlots);
+                            expected = Join(",", template.GenerateCompiler(dict["ProducesCode"]).CodeSlots);
                         }
                         else if (dict.ContainsKey("ProducesMif"))
                         {
                             var mif = compiler.GenerateMif().ToArray();
-                            actual = mif.FirstOrDefault(line => line.IsEqual(required)) ?? string.Join(" ", mif);
+                            actual = mif.FirstOrDefault(line => line.IsEqual(expected)) ?? Join(" ", mif);
                         }
                     }
                     catch (Exception ex)
@@ -199,17 +222,17 @@ namespace ForthCompiler
                         actual = ex.Message;
                     }
 
-                    if (actual.IsEqual(required))
+                    if (actual.IsEqual(expected))
                     {
                         yield return
-                            $"({string.Join("", values.Select(kvp => $@" {kvp.Key} ""{kvp.Value}"""))} {DateTime.Now - startTC} ) 0";
+                            $"( {Join(" ", values.Select(kvp => $@"{kvp.Key} ""{kvp.Value}"""))} ) 0";
                     }
                     else
                     {
                         values["Actual"] = actual;
-                        values["Required"] = required;
+                        values["Expected"] = expected;
                         yield return
-                            $"({string.Join("", values.Select(kvp => $@" {kvp.Key} ""{kvp.Value}"""))} {DateTime.Now - startTC} ) -1";
+                            $"( {Join(" ", values.Select(kvp => $@"{kvp.Key} ""{kvp.Value}"""))} ) -1";
                     }
                 }
                 else
@@ -224,7 +247,7 @@ namespace ForthCompiler
         public void GenerateCoverageTestCases()
         {
             var optimizMethods = GetType().GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
-                                     .Where(m => m.GetCustomAttribute<OptimizationMethod>() != null);
+                                          .Where(m => m.GetCustomAttribute<OptimizationMethod>() != null);
             var items = Words.Select(x => new { Name = x.Key, Refs = Coverage.At(x.Key), Type = x.Value.GetType() })
                              .Where(w => !Architecture.GetProperties().ContainsKey(w.Name))
                              .ToList();
@@ -256,15 +279,15 @@ namespace ForthCompiler
         {
             return Tokens.Where(t => t.MacroLevel == 0)
                          .GroupBy(t => $"{t.File}({t.Y}): ")
-                         .Select(g => $"{g.Key} {string.Join(null, g.Select(t => t.Text))}");
+                         .Select(g => $"{g.Key} {Join(null, g.Select(t => t.Text))}");
         }
 
-        public void ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, string input, int macroLevel = 0)
+        public int ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, string input, int macroLevel = 0)
         {
-            ReadFile(pos, file, y, x, input.Split(new[] { "\r\n", "\r", "\n" }, 0), macroLevel);
+            return ReadFile(pos, file, y, x, input.Split(new[] { "\r\n", "\r", "\n" }, 0), macroLevel);
         }
 
-        public void ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, string[] input, int macroLevel = 0)
+        public int ReadFile(int pos, string file, Func<int, int> y, Func<int, int> x, string[] input, int macroLevel = 0)
         {
             var start = Tokens.Count;
             var tokenIndex = TokenIndex;
@@ -286,13 +309,14 @@ namespace ForthCompiler
             }
 
             TokenIndex = tokenIndex;
+            return inserted;
         }
 
         public void PreCompile()
         {
             for (TokenIndex = 0; TokenIndex < Tokens.Count; TokenIndex++)
             {
-                if (!Token.IsExcluded && PrecompileWords.ContainsKey(Token.Text))
+                if (!Token.IsExcluded && PrecompileWords.ContainsKey(Token.SymbolName))
                 {
                     ParseSymbol(PrecompileWords);
                 }
@@ -306,16 +330,7 @@ namespace ForthCompiler
 
             for (TokenIndex = from ?? 0; TokenIndex < Tokens.Count; TokenIndex++)
             {
-                if (Token.TokenType == TokenType.Literal)
-                {
-                    _argIndex = TokenIndex;
-                    Encode(OpCode.Psh);
-                    Encode(Convert.ToInt32(
-                        Token.Text.Trim('$', '#', '%'),
-                        Token.Text.StartsWith("$") ? 16 : Token.Text.StartsWith("%") ? 2 : 10));
-                    _lastToken = Token;
-                }
-                else if (!Token.IsExcluded)
+                if (!Token.IsExcluded)
                 {
                     ParseSymbol(Words);
                     _lastToken = Token;
@@ -337,7 +352,7 @@ namespace ForthCompiler
 
             foreach (var prop in Architecture.GetProperties().Where(p => Words.At(p.Key) is Constant))
             {
-                prop.Value.SetValue(Architecture, ((Constant)Words[prop.Key]).Value);
+                prop.Value.Set(((Constant)Words[prop.Key]).Value);
             }
 
             CodeSlots.SetCount(fromCode);
@@ -351,34 +366,35 @@ namespace ForthCompiler
                         var toAdd = (codeslot.Value - CodeSlots.Count).Validate(
                                         x => $"Org value decreasing from {CodeSlots.Count} to {codeslot.Value}",
                                         x => x >= 0);
-                        CodeSlots.AddRange(Range(0, (int)toAdd).Select(x => (CodeSlot)OpCode._0));
+                        CodeSlots.AddRange(Range(0, (int)toAdd).Select(x => (CodeSlot)OpCode.Swp));
                         break;
                     case OpCode.Label:
                         break;
                     case OpCode.Address:
-                        CodeSlots.AddRange(0L.ToPfx(addressSize).ToArray());
+                        codeslot.Value = labels.At(codeslot.Label).Validate(a => $"Missing label {codeslot.Label}").CodeIndex;
+                        CodeSlots.AddRange(codeslot.Value == 0 ? 0L.ToPfx(addressSize) : Architecture.ToAddressAndSubWordSlot(codeslot.Value).ToPfx());
                         break;
                     case OpCode.Literal:
-                        CodeSlots.AddRange(codeslot.Value.ToPfx().ToArray());
+                        CodeSlots.AddRange(codeslot.Value.ToPfx());
                         break;
                     default:
-                        CodeSlots.Add(codeslot);
+                        CodeSlots.AddRange(Architecture.Opcodes[codeslot.OpCode]);
                         break;
                 }
             }
 
-            foreach (var address in Compilation.Skip(fromComp).Where(cs => cs.OpCode == OpCode.Address))
+            foreach (var address in Compilation.Skip(fromComp).Where(cs => cs.OpCode == OpCode.Address && cs.Value == 0))
             {
                 address.Value = labels.At(address.Label).Validate(a => $"Missing label {address.Label}").CodeIndex;
 
                 var pfx = Architecture.ToAddressAndSubWordSlot(address.Value).ToPfx(addressSize).ToArray();
-
-                CodeSlots.Replace((int)address.CodeIndex, addressSize, pfx);
+                CodeSlots.RemoveRange((int)address.CodeIndex, pfx.Length);
+                CodeSlots.InsertRange((int)address.CodeIndex, pfx);
             }
 
             foreach (var label in labels.Where(l => l.Value.CodeIndex >= 0 && l.Value.CodeIndex < CodeSlots.Count))
             {
-                CodeSlots[(int)label.Value.CodeIndex].Label = label.Key;
+                Labels[label.Value.CodeIndex] = label.Key;
             }
 
             for (i = Tokens.Count - 1, index = CodeSlots.Count; i >= fromToken; i--)
@@ -474,11 +490,14 @@ namespace ForthCompiler
             var prereqs = Words.Where(w => (w.Value as Macro)?.Prereqs != null)
                                .ToDictionary(w => w.Key, w => w.Value as Macro, OrdinalIgnoreCase);
 
+            // remove prequisite code that was only referenced by code inside [ ] brackets
             removePrereqs.UnionWith(prereqs.Where(w => w.Value.Prereqs?[true].Count > 0 &&
                                                        w.Value.Prereqs?[false].Count == 0)
                                            .Select(w => w.Key));
+
+            // remove prequisite code that is no longer referenced (because of other optimizations)
             removePrereqs.UnionWith(prereqs.Where(w => w.Value.Prereqs != null)
-                                           .Where(w => w.Value.Prereqs[false].All(i => Words[i] is Definition))
+                                           .Where(w => w.Value.Prereqs[false].All(i => Words.At(i) is Definition))
                                            .Where(w => w.Value.Prereqs[false].All(i => !referencedDefinitions.Contains(Words[i])))
                                            .Select(w => w.Key));
 
@@ -591,12 +610,23 @@ namespace ForthCompiler
             }
         }
 
+        private void ParseDocumentation()
+        {
+            var start = TokenIndex;
+            ParseWhiteSpace(t => t.IsExcluded && !t.IsDocumentation);
+            if (Token.IsDocumentation)
+            {
+                Doc[_argValues[0]] = Tokens.Skip(start).ToDoc();
+            }
+            TokenIndex = start;
+        }
+
         private void ParseSymbol(IDictionary<string, IDictEntry> dict)
         {
             _argValues.Clear();
             _argIndex = TokenIndex;
 
-            var dictEntry = dict.At(ArgToken.Text).Validate(de => $"{ArgToken.Text} is not defined");
+            var dictEntry = dict.At(ArgToken.SymbolName).Validate(de => $"{ArgToken.Text} is not defined");
             var argcount = (dictEntry as InternalMethod)?.Arguments;
 
             for (int i = 0; i < argcount; i++)
@@ -606,7 +636,7 @@ namespace ForthCompiler
                 _argValues.Add(Token.Text);
             }
 
-            Coverage.Increment(ArgToken.Text);
+            Coverage.Increment(ArgToken.SymbolName);
             dictEntry.Process(this);
         }
 
@@ -654,7 +684,6 @@ namespace ForthCompiler
             Compilation.Add(code);
         }
 
-        [InternalMethod(Name = nameof(Include), Arguments = 1, IsPrecompile = true)]
         private void IncludePrecompile()
         {
             var filename = _argValues[0].Dequote();
@@ -662,34 +691,122 @@ namespace ForthCompiler
             ReadFile(TokenIndex + 1, filename, y => y, x => x, filename.LoadText());
         }
 
-        [InternalMethod(Arguments = 1, Doc = "Includes named file")]
+        [InternalMethod("Includes named file", Arguments = 1)]
         private void Include()
         {
         }
 
-        [InternalMethod(Name = nameof(Org), IsPrecompile = true)]
         private void OrgPrecompile()
         {
             _prerequisiteIndex = TokenIndex + 1;
         }
 
-        [InternalMethod(Doc = "Sets program address")]
+        [InternalMethod("Sets program address")]
         private void Org()
         {
-            var cpu = Evaluate(_lastToken).Validate(x => "ORG expects 1 preceding value", x => x.ForthStack.Count() == 1);
+            var cpu = Evaluate(_lastToken).Validate(x => "ORG expects 1 preceding value", x => x.Stack.Count() == 1);
 
-            Encode(new CodeSlot { OpCode = OpCode.Org, Value = cpu.ForthStack.First() });
+            Encode(new CodeSlot { OpCode = OpCode.Org, Value = cpu.Stack.First() });
         }
 
-        [InternalMethod(Doc = "Allots X bytes to heap at compile time")]
+        [InternalMethod("Allots X bytes to heap at compile time")]
         private void Allot()
         {
-            var cpu = Evaluate(_lastToken).Validate(x => "ALLOT expects 1 preceding value", x => x.ForthStack.Count() == 1);
+            var cpu = Evaluate(_lastToken).Validate(x => "ALLOT expects 1 preceding value", x => x.Stack.Count() == 1);
 
-            _heapSize += cpu.ForthStack.First();
+            _heapSize += cpu.Stack.First();
         }
 
-        [InternalMethod(Arguments = 1, Doc = "Defines macro - usage: MACRO MacroName MacroText ENDMACRO")]
+        [InternalMethod(null, Name = "Literal($)")]
+        private void LiteralHex()
+        {
+            Encode(OpCode.Psh);
+            Encode(Convert.ToInt32(Token.Text.Substring(1), 16));
+        }
+
+        [InternalMethod(null, Name = "Literal(%)")]
+        private void LiteralBin()
+        {
+            Encode(OpCode.Psh);
+            Encode(Convert.ToInt32(Token.Text.Substring(1), 2));
+        }
+
+        [InternalMethod(null, Name = "Literal(#)")]
+        private void LiteralDec()
+        {
+            Encode(OpCode.Psh);
+            Encode(Convert.ToInt32(Token.Text.Substring(1), 10));
+        }
+
+        [InternalMethod(null, Name = "Literal()")]
+        private void LiteralDefault()
+        {
+            Encode(OpCode.Psh);
+            Encode(Convert.ToInt32(Token.Text, 10));
+        }
+
+        private void CountedStringPrecompile()
+        {
+            var value = Token.Text.Dequote();
+
+            if (!_countedStrings.ContainsKey(value))
+            {
+                Prerequisite("LoopStackCode");
+                Prerequisite("LoadCode");
+
+                var variable = _countedStrings[value] = $"_CountedString{_countedStrings.Count}";
+                var code = $@"{nameof(Create)} {variable} {value.Length + 1} {nameof(Allot)} " +
+                           $@"{Join(" ", value.AsEnumerable().Reverse().Select(x => (int)x))} {value.Length} " +
+                           $@"{value.Length + 1} {variable} Load \ {value}";
+                var inserted = ReadFile(_prerequisiteIndex, variable, y => y, x => x, code);
+
+                _prerequisiteIndex += inserted;
+                TokenIndex += inserted;
+            }
+        }
+
+        [InternalMethod("Specifies counted string", Name = "String(C)")]
+        private void CountedString()
+        {
+            Macro(_countedStrings[Token.Text.Dequote()]);
+        }
+
+        private void EmitStringPrecompile()
+        {
+            Prerequisite("IoBaseCode");
+
+            if (Token.Text.Dequote().Length > 2)
+            {
+                Prerequisite("IoDefinitionCode");
+                CountedStringPrecompile();
+            }
+        }
+
+        [InternalMethod("Emits string", Name = "String(.)")]
+        private void EmitString()
+        {
+            var value = Token.Text.Dequote();
+
+            if (value.Length > 2)
+            {
+                Macro($"{_countedStrings[value]} count type");
+            }
+            else
+            {
+                Macro(Join(" ", value.AsEnumerable().Select(x => $"{(int)x} emit")));
+            }
+        }
+
+        [InternalMethod("Specifies literal character" +
+                        @"usage: [CHAR] X or [CHAR] ""X""", Name = "[CHAR]", Arguments = 1)]
+        private void Char()
+        {
+            Encode(OpCode.Psh);
+            Encode((_argValues[0].Dequote().Validate(arg => "CHAR Argument must be one character", arg => arg.Length == 1))[0]);
+        }
+
+        [InternalMethod("Defines macro",
+                        "usage: MACRO MacroName MacroText ENDMACRO", Arguments = 1)]
         private void Macro()
         {
             var tokens = ParseBlock().Skip(1).ToArray();
@@ -700,30 +817,34 @@ namespace ForthCompiler
             Doc[_argValues[0].Dequote()] = tokens.ToDoc();
         }
 
-        [InternalMethod(Arguments = 1, Doc = "Undefines word - usage: UNDEFINE Word")]
+        [InternalMethod("Undefines word",
+                        "usage: UNDEFINE Word", Arguments = 1)]
         private void Undefine()
         {
             Words.Remove(_argValues[0].Dequote());
         }
 
-        [InternalMethod(Doc = "Defines peephole Optimization - usage: OPTIMIZATION UnoptimisedCode OPTIMIZESTO OptimisedCode [ ISLASTPASS ] OPTIMIZATION")]
+        [InternalMethod("Defines peephole Optimization",
+                        "usage: OPTIMIZATION UnoptimisedCode OPTIMIZESTO OptimisedCode [ ISLASTPASS ] OPTIMIZATION")]
         public void Optimization()
         {
             _optimizations.Add(new Optimization { Tokens = ParseBlock().ToArray() });
         }
 
-        [InternalMethod(Doc =
-            "Defines TestCase - usage: TESTCASE TestCode                       PRODUCES          ExpectedResult    ENDTESTCASE\r\n" +
-            "                       or TESTCASE TestCode [ WITHCORE CoreCode ] PRODUCESEXCEPTION ExpectedException ENDTESTCASE\r\n" +
-            "                       or TESTCASE TestCode                       PRODUCESCODE      ExpectedCode      ENDTESTCASE\r\n" +
-            "                       or TESTCASE TestCode                       PRODUCESMIF       ExpectedMifLine   ENDTESTCASE\r\n" +
-            "                       or TESTCASE TestCode                                                           ENDTESTCASE")]
+        [InternalMethod("Defines a Test Case",
+                        "usage: TESTCASE TestCode                       PRODUCES          ExpectedResult    ENDTESTCASE",
+                        "    or TESTCASE TestCode [ WITHINPUT Input ]   PRODUCESOUTPUT    ExpectedResult    ENDTESTCASE",
+                        "    or TESTCASE TestCode [ WITHCORE CoreCode ] PRODUCESEXCEPTION ExpectedException ENDTESTCASE",
+                        "    or TESTCASE TestCode [ WITHOPTIMIZATION ]  PRODUCESCODE      ExpectedCode      ENDTESTCASE",
+                        "    or TESTCASE TestCode                       PRODUCESMIF       ExpectedMifLine   ENDTESTCASE",
+                        "    or TESTCASE TestCode                                                           ENDTESTCASE")]
         public void TestCase()
         {
             _testCases.Add(ParseBlock().ToArray());
         }
 
-        [InternalMethod(Arguments = 2, Doc = "Opens Label and Addr scope - usage: STRUCT ScopeName EndScopeHint")]
+        [InternalMethod("Opens Label and Addr scope",
+                        "usage: STRUCT ScopeName EndScopeHint", Arguments = 2)]
         private void Struct()
         {
             StructureStack.Push(new Structure
@@ -740,7 +861,8 @@ namespace ForthCompiler
             }
         }
 
-        [InternalMethod(Arguments = 1, Doc = "Closes Label and Addr scope - usage: ENDSTRUCT ScopeName")]
+        [InternalMethod("Closes Label and Addr scope",
+                        "usage: ENDSTRUCT ScopeName", Arguments = 1)]
         private void EndStruct()
         {
             var struc = StructureStack.Pop(_argValues[0].Dequote());
@@ -751,25 +873,32 @@ namespace ForthCompiler
             }
         }
 
-        [InternalMethod(Arguments = 1, Doc = "Defines Constant - usage: MacroValue CONSTANT MacroName")]
+        [InternalMethod("Defines Constant",
+                        "usage ConstantValue CONSTANT ConstantName", Arguments = 1)]
         private void Constant()
         {
-            var cpu = Evaluate(_lastToken).Validate(x => "CONSTANT expects 1 preceding value", x => x.ForthStack.Count() == 1);
-            var value = cpu.ForthStack.First();
-            var start = TokenIndex;
+            var cpu = Evaluate(_lastToken).Validate(x => "CONSTANT expects 1 preceding value", x => x.Stack.Count() == 1);
+            var value = cpu.Stack.Take(1).ToArray();
 
             Token.TokenType = TokenType.Constant;
             Words.At(_argValues[0], () => new Constant(), !_argValues[0].StartsWith(".")).Value = value;
-
-            ParseWhiteSpace(t => t.IsExcluded && !t.IsDocumentation);
-            if (Token.IsDocumentation)
-            {
-                Doc[_argValues[0]] = Tokens.Skip(start).ToDoc();
-            }
-            TokenIndex = start;
+            ParseDocumentation();
         }
 
-        [InternalMethod(Arguments = 1, Doc = "References Label - usage: ADDR [ScopeName].Label")]
+        [InternalMethod("Defines Double value Constant",
+                        "usage ConstantValue1 ConstantValue2 CONSTANT ConstantName", Name ="2CONSTANT", Arguments = 1)]
+        private void Constant2()
+        {
+            var cpu = Evaluate(_lastToken).Validate(x => "2CONSTANT expects 2 preceding value", x => x.Stack.Count() == 2);
+            var value = cpu.Stack.Take(2).Reverse().ToArray();
+
+            Token.TokenType = TokenType.Constant;
+            Words.At(_argValues[0], () => new Constant(), !_argValues[0].StartsWith(".")).Value = value;
+            ParseDocumentation();
+        }
+
+        [InternalMethod("References Label",
+                        "usage: ADDR [ScopeName].Label", Arguments = 1)]
         private void Addr()
         {
             var prefix = _argValues[0].Split('.').First();
@@ -779,7 +908,8 @@ namespace ForthCompiler
             Encode(new CodeSlot { OpCode = OpCode.Address, Label = _argValues[0] + structure.Suffix });
         }
 
-        [InternalMethod(Arguments = 1, Doc = "Defines Label - usage: LABEL [ScopeName].Label")]
+        [InternalMethod("Defines Label",
+                        "usage: LABEL [ScopeName].Label", Arguments = 1)]
         private void Label()
         {
             var prefix = _argValues[0].Split('.').First();
@@ -788,60 +918,69 @@ namespace ForthCompiler
             Encode(new CodeSlot { OpCode = OpCode.Label, Label = _argValues[0] + structure.Suffix });
         }
 
-        [InternalMethod(Arguments = 1, Doc = "Defines Variable with value - usage: Value VALUE VariableName")]
-        private void Value()
-        {
-            Macro($"variable {_argValues[0]} {_argValues[0]} !");
-        }
-
-        [InternalMethod(Arguments = 1, Doc = "Defines Variable - usage: VARIABLE VariableName")]
+        [InternalMethod("Defines Variable",
+                        "usage: VARIABLE VariableName", Arguments = 1)]
         private void Variable()
         {
-            var start = TokenIndex;
-
             Token.TokenType = TokenType.Variable;
             Words.At(_argValues[0], () => new Variable { HeapAddress = _heapSize++ }, true);
-
-            ParseWhiteSpace(t => t.IsExcluded && !t.IsDocumentation);
-            if (Token.IsDocumentation)
-            {
-                Doc[_argValues[0]] = Tokens.Skip(start).ToDoc();
-            }
-            TokenIndex = start;
+            ParseDocumentation();
         }
 
-        [InternalMethod(Name = "[", IsPrecompile = true)]
+        [InternalMethod("Defines Variable without allocation space",
+                        "usage: CREATE VariableName", Arguments = 1)]
+        private void Create()
+        {
+            Token.TokenType = TokenType.Variable;
+            Words.At(_argValues[0], () => new Variable { HeapAddress = _heapSize }, true);
+            ParseDocumentation();
+        }
+
+        [InternalMethod("Defines Variable with value",
+                        "usage: Value VALUE VariableName", Arguments = 1)]
+        private void Value()
+        {
+            Macro($"{nameof(Variable)} {_argValues[0]} {_argValues[0]} !");
+        }
+
+        [InternalMethod("Adds a value to the heap",
+                        "usage: Value ,", Name = ",")]
+        private void Comma()
+        {
+            Macro($"{_heapSize++} !");
+        }
+
         private void CompilerEvalStartPrecompile()
         {
             _isPrecompilingCompilerCode = true;
         }
 
-        [InternalMethod(Name = "]", IsPrecompile = true)]
         private void CompilerEvalStopPrecompile()
         {
             _isPrecompilingCompilerCode = false;
         }
 
-        [InternalMethod(Name = "[", Doc = "Marks the start of Compiler evaluation")]
+        [InternalMethod("Marks the start of Compiler evaluation", Name = "[")]
         private void CompilerEvalStart()
         {
             StructureStack.Push(new Structure { Name = "[", Close = "]", Value = TokenIndex });
         }
 
-        [InternalMethod(Name = "]", Doc = "Marks the end of Compiler evaluation")]
+        [InternalMethod("Marks the end of Compiler evaluation", Name = "]")]
         private void CompilerEvalStop()
         {
             var start = Tokens[(int)StructureStack.Pop("[").Value];
             var cpu = Evaluate(start);
 
-            cpu.ForthStack.Reverse().ForEach(v =>
+            cpu.Stack.Reverse().ForEach(v =>
             {
                 Encode(OpCode.Psh);
                 Encode(v);
             });
         }
 
-        [InternalMethod(Name = "(", IsComment = true, Doc = "Defines a comment - usage ( comment text )")]
+        [InternalMethod("Defines a comment",
+                        "usage: ( comment text )", Name = "(", IsComment = true)]
         private void CommentBracket()
         {
             ParseBlock(_commentIndex, ")").ForEach(t => t.TokenType = TokenType.Excluded);
@@ -849,7 +988,8 @@ namespace ForthCompiler
             Token.TokenType = TokenType.Excluded;
         }
 
-        [InternalMethod(Name = "\\", IsComment = true, Doc = @"Defines a line comment - usage \ comment text <end-of-line>")]
+        [InternalMethod("Defines a line comment",
+                        @"usage: \ comment text <end-of-line>", Name = "\\", IsComment = true)]
         private void CommentBackSlash()
         {
             var start = Token;
@@ -860,10 +1000,19 @@ namespace ForthCompiler
             TokenIndex += comment.Count - 1;
         }
 
-        [InternalMethod(Arguments = 2, Doc = "Defines prerequisite code - usage : PREREQUISITE Word MacroName")]
+        [InternalMethod("Defines prerequisite code",
+                        "usage: PREREQUISITE Word MacroName", Arguments = 2)]
         public void Prerequisite()
         {
             PrecompileWords.At(_argValues[0].Dequote(), () => new Prerequisite()).References.Add(_argValues[1]);
+        }
+
+        [InternalMethod("Defines raw opcode",
+                        "usage: value RAWOPCODE")]
+        public void RawOpcode()
+        {
+            var cpu = Evaluate(_lastToken).Validate(x => "RAWOPCODE expects 1 preceding value", x => x.Stack.Count() == 1);
+            Encode((OpCode)cpu.Stack.Single());
         }
 
         public void Prerequisite(string name)
@@ -872,6 +1021,9 @@ namespace ForthCompiler
 
             if (macro.Prereqs == null)
             {
+                macro.Prereqs = new Dictionary<bool, List<string>> { { false, new List<string>() }, { true, new List<string>() } };
+                macro.Tokens.Select(t => PrecompileWords.At(t.Text) as Prerequisite).ForEach(p => p?.Process(this));
+
                 var tokens = new[] {
                     macro.Tokens.First().Clone(" ", 0),
                     macro.Tokens.First().Clone(nameof(Label), 1),
@@ -885,7 +1037,6 @@ namespace ForthCompiler
                 Tokens.InsertRange(_prerequisiteIndex, tokens);
                 _prerequisiteIndex += tokens.Length;
                 TokenIndex += tokens.Length;
-                macro.Prereqs = new Dictionary<bool, List<string>> { { false, new List<string>() }, { true, new List<string>() } };
             }
 
             macro.Prereqs[_isPrecompilingCompilerCode].Add(Token.Text);
@@ -907,8 +1058,18 @@ namespace ForthCompiler
     {
     }
 
+    public class DocAttribute : Attribute
+    {
+        public string Doc { get; }
+
+        public DocAttribute(params string[] doc)
+        {
+            Doc = Join(Environment.NewLine, doc ?? new string[0]);
+        }
+    }
+
     [AttributeUsage(AttributeTargets.Method)]
-    public class InternalMethod : Attribute, IDictEntry
+    public class InternalMethod : DocAttribute, IDictEntry
     {
         public string Name { get; set; }
 
@@ -918,13 +1079,13 @@ namespace ForthCompiler
 
         public bool IsComment { get; set; }
 
-        public bool IsPrecompile { get; set; }
-
-        public string Doc { get; set; }
-
         public void Process(Compiler compiler)
         {
             Action();
+        }
+
+        public InternalMethod(params string[] doc) : base(doc)
+        {
         }
     }
 

@@ -73,7 +73,7 @@ namespace ForthCompiler
 
                     for (var i = token.CodeIndex; Parent.ShowAsm.IsChecked && i < token.CodeIndex + token.CodeCount; i++)
                     {
-                        var codeslot = Parent.Compiler.CodeSlots[(int)i];
+                        var codeslot = Parent.Compiler.Compilation[(int)i];
 
                         if (codeslot == null)
                             continue;

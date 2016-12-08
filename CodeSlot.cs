@@ -21,7 +21,7 @@ namespace ForthCompiler
 
         public override string ToString()
         {
-            return $"{OpCode}{(OpCode == OpCode.Literal || OpCode == OpCode.Address || OpCode == OpCode.Label ? $" {Value}" : null)} {Label}";
+            return OpCode == OpCode.Literal ? $"{OpCode} {Value}" : $"{OpCode} {Label}";
         }
     }
 }

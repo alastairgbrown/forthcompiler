@@ -6,11 +6,12 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Security.RightsManagement;
 using System.Text;
+using System.Text.RegularExpressions;
 using ForthCompiler.Annotations;
 using static System.Linq.Enumerable;
 using static System.Math;
+using static System.String;
 using static System.StringComparer;
 
 namespace ForthCompiler
@@ -19,15 +20,14 @@ namespace ForthCompiler
     {
         public static bool IsEqual(this string a, string b)
         {
-            return string.Compare(a, b, StringComparison.OrdinalIgnoreCase) == 0;
+            return Compare(a, b, StringComparison.OrdinalIgnoreCase) == 0;
         }
 
-        public static void Sort<T>([NotNull]this ObservableCollection<T> collection, Comparison<T> comparison)
+        public static void Sort<T,TKey>([NotNull]this ObservableCollection<T> collection, Func<T, TKey> keySelector)
         {
-            var sortableList = new List<T>(collection);
-            sortableList.Sort(comparison);
+            var sortableList = collection.OrderBy(keySelector).ToArray();
 
-            for (int i = 0; i < sortableList.Count; i++)
+            for (int i = 0; i < sortableList.Length; i++)
             {
                 collection.Move(collection.IndexOf(sortableList[i]), i);
             }
@@ -65,12 +65,19 @@ namespace ForthCompiler
 
         public static string ToText([NotNull] this IEnumerable<Token> tokens)
         {
-            return string.Join(null, tokens.Select(t => t.Text)).Dequote();
+            return Join(null, tokens.Select(t => t.Text)).Dequote();
+        }
+
+        public static string ToScript([NotNull] this IEnumerable<Token> tokens)
+        {
+            return Join(
+                Environment.NewLine,
+                tokens.GroupBy(t => new { t.File, t.Y }).Select(g => Join(string.Empty, g.Select(t => t.Text))));
         }
 
         public static string ToDoc(this IEnumerable<Token> tokens)
         {
-            return string.Join(null,
+            return Join(null,
                 tokens.SkipWhile(t => !t.IsDocumentation)
                       .TakeWhile(t => t.IsExcluded)
                       .Select(t => t.Text)).Trim('(', ')', '\\', ' ', '\t', '\r', '\n');
@@ -105,9 +112,9 @@ namespace ForthCompiler
             }
         }
 
-        public static T At<TD, T>([NotNull]this Dictionary<string, TD> dict, string key, Func<T> createFunc, bool exclusive = false) where T : TD
+        public static T At<TKey, TVal, T>([NotNull]this IDictionary<TKey, TVal> dict, TKey key, Func<T> createFunc, bool exclusive = false) where T : TVal
         {
-            TD entry;
+            TVal entry;
 
             if (dict.TryGetValue(key, out entry))
             {
@@ -138,7 +145,9 @@ namespace ForthCompiler
 
         public static string Dequote(this string text)
         {
-            return text?.Trim('"', ' ', '\t', '\r', '\n') ?? string.Empty;
+            text = text?.Trim(' ', '\t', '\r', '\n') ?? String.Empty;
+            var match = Regex.Match(text, @"^[Cc.]?""((?:""""|[^""])*)""$");
+            return match.Success ? match.Groups[1].Value.Replace(@"""""", @"""") : text;
         }
 
         public static T Validate<T>(this T obj, Func<T, string> message, Predicate<T> func = null)
@@ -201,14 +210,14 @@ namespace ForthCompiler
             return (value / 8) * 6 + (value % 8);
         }
 
-        public static IEnumerable<CodeSlot> ToPfx(this long value, int? length = null)
+        public static IEnumerable<long> ToPfx(this long value, int? length = null)
         {
             var twosComp = unchecked((ulong)value);
             var codes = Range(0, 8).Select(i => (twosComp >> ((7 - i) * 4)) & 0xF).ToArray();
             var msbit = Range(1, 31).Reverse().FirstOrDefault(i => ((twosComp >> i) & 1) != (value < 0 ? 1ul : 0));
             var needed = length ?? ((msbit + 5) / 4);
 
-            return codes.Skip(codes.Length - needed).Select(c => (CodeSlot)(OpCode)((int)OpCode._0 + c));
+            return codes.Skip(codes.Length - needed).Select(c => (long)c);
         }
 
         public static void Replace([NotNull] this List<CodeSlot> list, int index, int remove, CodeSlot[] add)

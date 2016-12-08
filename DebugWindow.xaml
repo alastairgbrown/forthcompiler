@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:ForthCompiler"
         mc:Ignorable="d"
-        Title="4th Debbugger" Height="342.279" Width="766.912"  
+        Title="4th Debugger" Height="342.279" Width="766.912"  
         Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}">
     <Window.Resources>
         <DataTemplate x:Key="SourceItemTemplate" DataType="{x:Type local:SourceItem}">
@@ -27,7 +27,7 @@
         </DataTemplate>
         <DataTemplate x:Key="HeapItemTemplate" DataType="{x:Type local:HeapItem}">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding Name}" MinWidth="80" Foreground="{Binding NameForeground}"/>
+                <TextBlock Text="{Binding Name}" MinWidth="120" Foreground="{Binding NameForeground}"/>
                 <TextBlock Text="{Binding AddressFormatted}" MinWidth="40"/>
                 <TextBlock Text="{Binding Value}" MinWidth="40" Foreground="{Binding ValueForeground}"/>
             </StackPanel>
@@ -45,7 +45,6 @@
         <CommandBinding Command="{x:Static local:Shortcuts.StepOver}" Executed="StepOver_Click"/>
         <CommandBinding Command="{x:Static local:Shortcuts.StepInto}" Executed="StepInto_Click"/>
         <CommandBinding Command="{x:Static local:Shortcuts.StepOut}" Executed="StepOut_Click"/>
-        <CommandBinding Command="{x:Static local:Shortcuts.Execute}" Executed="CommandLineRun_Click"/>
     </Window.CommandBindings>
 
     <Grid Background="{DynamicResource {x:Static SystemColors.MenuBrushKey}}" Margin="3">
@@ -61,7 +60,7 @@
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="20" />
-            <ColumnDefinition Width="195" />
+            <ColumnDefinition Width="245" />
             <ColumnDefinition Width="20"/>
             <ColumnDefinition/>
         </Grid.ColumnDefinitions>
@@ -89,7 +88,7 @@
                 <MenuItem x:Name="ShowCommandLine" Header="Show Command Line" HorizontalAlignment="Left" IsCheckable="True" Click="ShowCommandLine_Click"/>
             </MenuItem>
         </Menu>
-        <Label Content="Status" Margin="-8,12,189,0" Grid.Row="1" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
+        <Label Content="Status" Margin="-34,0,215,0" Grid.Column="0" VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5" Grid.ColumnSpan="2">
             <Label.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>
@@ -104,9 +103,10 @@
                 <TextBlock x:Name="CpuStatus" FontFamily="Consolas" TextWrapping="Wrap">Cpu</TextBlock><Run FontFamily="Consolas" Text="&#13;&#10;"></Run><TextBlock x:Name="Status" FontFamily="Consolas">Status</TextBlock>
             </TextBlock>
         </Border>
-        <Border x:Name="CommandLineBorder" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Visibility="Collapsed" Padding="2" >
+        <Border x:Name="CommandLineBorder" Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="3" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" Padding="2" Margin="0,0,0,4" Grid.RowSpan="2" >
             <Grid>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -117,6 +117,7 @@
                 <TextBox x:Name="CommandLine" FontFamily="Consolas" TextChanged="CommandLine_TextChanged" KeyUp="CommandLine_KeyUp"/>
                 <Button x:Name="CommandLineRun" Grid.Column="1" Click="CommandLineRun_Click" Grid.Row="0" Grid.RowSpan="2">Run</Button>
                 <Label x:Name="CommandLineTokens" Grid.Row="1" Grid.Column="0" />
+                <TextBox x:Name="InputOutput" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" IsReadOnlyCaretVisible="True" IsReadOnly="True" TextInput="InputOutput_TextInput"></TextBox>
             </Grid>
         </Border>
         <Border Grid.Row="5" Grid.Column="1" BorderBrush="LightGray" CornerRadius="8" BorderThickness="1"  Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" >
@@ -138,7 +139,7 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <Label Content="Source" Grid.Row="5" Grid.Column="2 " VerticalAlignment="Top" Height="18" Padding="0" Foreground="#FFF58704" Margin="1,39,493,0" Grid.ColumnSpan="2">
+        <Label Content="Source" Grid.Row="5" Grid.Column="2 " VerticalAlignment="Top" Height="18" Padding="0" Foreground="#FFF58704" Margin="1,39,450,0" Grid.ColumnSpan="2">
             <Label.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>
@@ -148,8 +149,8 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <Label Content="Call Stack" Margin="-16,21,179,-5" Grid.Row="7" Grid.ColumnSpan="2" Grid.Column="0"
-               VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5">
+        <Label Content="Call Stack" Margin="-42,3,205,0" Grid.Row="6" Grid.ColumnSpan="2" Grid.Column="0"
+               VerticalAlignment="Top" Height="15" Padding="0" Foreground="#FFF58704" RenderTransformOrigin="0.5,0.5" Grid.RowSpan="2">
             <Label.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform/>

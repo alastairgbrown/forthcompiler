@@ -9,7 +9,6 @@ namespace ForthCompiler
         public static RoutedCommand StepOver = new RoutedCommand();
         public static RoutedCommand StepInto = new RoutedCommand();
         public static RoutedCommand StepOut = new RoutedCommand();
-        public static RoutedCommand Execute = new RoutedCommand();
 
         static Shortcuts()
         {
@@ -18,7 +17,6 @@ namespace ForthCompiler
             StepOver.InputGestures.Add(new KeyGesture(Key.F10, ModifierKeys.None));
             StepInto.InputGestures.Add(new KeyGesture(Key.F11, ModifierKeys.None));
             StepOut.InputGestures.Add(new KeyGesture(Key.F11, ModifierKeys.Shift));
-            Execute.InputGestures.Add(new KeyGesture(Key.Enter, ModifierKeys.None));
         }
     }
 }

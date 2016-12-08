@@ -3,13 +3,16 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using static System.Environment;
 using static System.Linq.Enumerable;
 using static System.Math;
+using static System.String;
 using Brushes = System.Windows.Media.Brushes;
 
 namespace ForthCompiler
@@ -65,15 +68,11 @@ namespace ForthCompiler
 
             if (error != null)
             {
-                Cpu = new Cpu(Compiler.CodeSlots,Compiler.Architecture);
+                Cpu = new Cpu(Compiler.CodeSlots, Compiler.Labels, Compiler.Architecture);
                 ProgramIndex = (Compiler.ArgToken?.CodeIndex ?? 1) - 1;
                 Refresh();
                 CpuStatus.Inlines.Clear();
                 CpuStatus.Inlines.Add(new Run { Text = error, Foreground = Brushes.Red });
-            }
-            else if (test)
-            {
-                RunTests_Click(null, null);
             }
             else
             {
@@ -99,6 +98,13 @@ namespace ForthCompiler
             Status.Text = _commandLines.LastOrDefault() ?? "";
             Status.Foreground = Brushes.Black;
 
+            if (Cpu.Output.Any())
+            {
+                InputOutput.Text += Join(null, Cpu.Output);
+                InputOutput.Select(InputOutput.Text.Length, 0);
+                Cpu.Output.Clear();
+            }
+
             if (ShowCommandLine.IsChecked)
             {
                 CommandLineTokens.Content = _commandLine?.Text;
@@ -111,7 +117,7 @@ namespace ForthCompiler
 
             var addresses = new HashSet<long>(HeapItems.Select(hi => hi.Address));
             HeapItems.AddRange(Cpu.Heap.Keys.Where(a => !addresses.Contains(a)).Select(a => new HeapItem { Parent = this, Address = a }));
-            HeapItems.Sort((a, b) => a.Address.CompareTo(b.Address));
+            HeapItems.Sort(hi => hi.Address);
 
             foreach (var item in HeapItems.Where(hi => hi.WasChanged || refreshHeap == null || refreshHeap(hi)))
             {
@@ -208,44 +214,94 @@ namespace ForthCompiler
             Compiler.Compilation.SetCount(_compOrig);
             Compiler.CodeSlots.SetCount(_codeOrig);
             CommandLine.Text = "";
-            Cpu = new Cpu(Compiler.CodeSlots, Compiler.Architecture);
+            Cpu = new Cpu(Compiler.CodeSlots, Compiler.Labels, Compiler.Architecture);
             ProgramIndex = 0;
 
+            ResetHeapItems();
+
+            InputOutput.Text = string.Empty;
+            SourceItems.ForEach(si => si.TestResult = null);
+
+            Refresh();
+        }
+
+        private void ResetHeapItems()
+        {
             HeapItems.Clear();
             foreach (var variable in Compiler.Words.Select(v => new { v.Key, Value = v.Value as Variable }).Where(v => v.Value != null))
             {
                 HeapItems.Add(new HeapItem { Parent = this, Name = variable.Key, Address = variable.Value.HeapAddress });
             }
 
-            SourceItems.ForEach(si => si.TestResult = null);
-
-            Refresh();
+            foreach (var prop in Cpu.Architecture.GetProperties()
+                                                 .Select(p => new { p.Key, Value = p.Value.Get()?.FirstOrDefault() ?? 0 })
+                                                 .Where(p => p.Key.EndsWith("_Address") && p.Value >= 0)
+                                                 .GroupBy(p => p.Value)
+                                                 .Where(g => HeapItems.All(hi => hi.Address != g.Key)))
+            {
+                HeapItems.Add(new HeapItem { Parent = this, Name = Join(NewLine, prop.Select(p => p.Key)), Address = prop.Key });
+            }
         }
 
         private void RunTests_Click(object sender, RoutedEventArgs e)
         {
-            var tests = SourceItems.Any(si => si.Break) ? SourceItems.Where(si => si.Break).ToArray() : SourceItems.ToArray();
+            var selected = new HashSet<long>(SourceItems.Where(i => i.Break).Select(i => i.CodeIndex));
             var results = new Dictionary<string, int> { { "PASS", 0 }, { "FAIL", 0 } };
+            var tests = SourceItems.Where(i => i.IsTestCase).ToDictionary(i => i.CodeIndex);
 
-            foreach (var test in tests.Where(t => t.IsTestCase))
+            Cpu = new Cpu(Compiler.CodeSlots, Compiler.Labels, Compiler.Architecture);
+            ResetHeapItems();
+
+            while (Cpu.ProgramIndex < Compiler.CodeSlots.Count)
             {
-                Cpu = new Cpu(Compiler.CodeSlots, Compiler.Architecture) { ProgramIndex = test.CodeIndex };
-                Cpu.Run(() => Cpu.ProgramIndex >= test.CodeIndex + test.CodeCount);
+                var test = tests.At(Cpu.ProgramIndex);
 
-                var stack = Cpu.ForthStack.ToArray();
-                var result = "FAIL";
-
-                if (stack.Length == 0 || stack.Length < 1 + stack.First())
+                if (test == null)
                 {
-                    test.TestResult = $"{result} stack={string.Join(" ", stack)}";
+                    Cpu.Run(() => tests.ContainsKey(Cpu.ProgramIndex));
+                    continue;
                 }
-                else
+
+                if (selected.Any() && !selected.Contains(Cpu.ProgramIndex))
                 {
-                    var actual = string.Join(" ", stack.Skip(1 + (int)stack.First()).Reverse());
-                    var expected = string.Join(" ", stack.Skip(1).Take((int)stack.First()).Reverse());
+                    Cpu.ProgramIndex = test.CodeIndex + test.CodeCount;
+                    continue;
+                }
+
+                Cpu.ResetStacks();
+                Cpu.Input.Clear();
+                Cpu.Output.Clear();
+                Cpu.Run(() => Cpu.ProgramIndex == test.CodeIndex + test.CodeCount);
+
+                var stack = new Stack<long>(Cpu.Stack.Reverse());
+                var result = "FAIL";
+                var outputRegex = new Regex("^Actual:(?<actual>.*)Expected:(?<expected>.*)Input:(?<input>.+)?$", RegexOptions.Singleline);
+                var output = outputRegex.Match(Join(null, Cpu.Output));
+
+                if (output.Groups["input"].Success)
+                {
+                    Cpu.ResetStacks();
+                    Cpu.Input.Clear();
+                    Cpu.Output.Clear();
+                    output.Groups["input"].Value.AsEnumerable().ForEach(c => Cpu.Input.Enqueue(c));
+                    Cpu.ProgramIndex = test.CodeIndex;
+                    Cpu.Run(() => Cpu.ProgramIndex == test.CodeIndex + test.CodeCount);
+
+                    output = outputRegex.Match(Join(null, Cpu.Output));
+                }
+
+                if (output.Success || (stack.Any() && stack.First() >= 0 && stack.Count >= 1 + stack.First()))
+                {
+                    var count = output.Success ? 0 : (int)stack.Pop();
+                    var actual = output.Success ? output.Groups["actual"].Value : Join(" ", stack.Skip(count).Reverse());
+                    var expected = output.Success ? output.Groups["expected"].Value : Join(" ", stack.Take(count).Reverse());
 
                     result = actual == expected ? "PASS" : "FAIL";
                     test.TestResult = $"{result} expected={expected} actual={actual}";
+                }
+                else
+                {
+                    test.TestResult = $"{result} stack={Join(" ", stack)}";
                 }
 
                 results[result]++;
@@ -254,7 +310,7 @@ namespace ForthCompiler
             ProgramIndex = Cpu.ProgramIndex;
             Refresh();
 
-            Status.Text = $"Test result - {string.Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}";
+            Status.Text = $"Test result - {Join(", ", results.Select(r => $"{r.Key}: {r.Value}"))}";
             Status.Foreground = results["FAIL"] == 0 && results["PASS"] > 0 ? Brushes.Green : Brushes.Red;
         }
 
@@ -370,6 +426,10 @@ namespace ForthCompiler
                     CommandLine.Text = index < 0 || index + 1 >= _commandLines.Count ? "" : _commandLines[index + 1];
                 }
             }
+            else if (e.Key == Key.Return)
+            {
+                CommandLineRun_Click(null, null);
+            }
         }
 
         private void CopyMenuItem_Click(object sender, RoutedEventArgs e)
@@ -384,5 +444,12 @@ namespace ForthCompiler
         private void SelectNone_Click(object sender, RoutedEventArgs e)
         {
         }
+
+        private void InputOutput_TextInput(object sender, TextCompositionEventArgs e)
+        {
+            e.Text.AsEnumerable().ForEach(c => Cpu.Input.Enqueue(c));
+            Refresh(si => false, hi => false);
+        }
+
     }
 }
