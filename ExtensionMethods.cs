@@ -33,14 +33,14 @@ namespace ForthCompiler
             }
         }
 
-        public static void AddRange([NotNull]this IList collection, IEnumerable items)
+        public static void AddRange<T>([NotNull]this ObservableCollection<T> collection, IEnumerable<T> items)
         {
             foreach (var item in items)
             {
                 collection.Add(item);
             }
         }
-
+        
         public static void RemoveRange([NotNull]this IList collection, int index, int count)
         {
             for (int i = count - 1; i >= 0; i--)

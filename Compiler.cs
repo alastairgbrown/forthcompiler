@@ -366,7 +366,7 @@ namespace ForthCompiler
                         var toAdd = (codeslot.Value - CodeSlots.Count).Validate(
                                         x => $"Org value decreasing from {CodeSlots.Count} to {codeslot.Value}",
                                         x => x >= 0);
-                        CodeSlots.AddRange(Range(0, (int)toAdd).Select(x => (CodeSlot)OpCode.Swp));
+                        CodeSlots.AddRange(Range(0, (int)toAdd).Select(x => Architecture.Opcodes[OpCode.Swp][0]));
                         break;
                     case OpCode.Label:
                         break;
