@@ -1,0 +1,194 @@
+module nano_top (
+   input    logic             clock50,
+   output   wire  [4:0]       led
+   );
+   
+            localparam              INSTRPATH = 20;
+            localparam              DATAPATH = 32;
+            localparam              STACK_DEPTH = 32;
+            localparam              ADC_WIDTH = 10;
+            localparam              SYSTEM_CLOCK = 100000000;
+            
+            localparam              DONTCARE = {128{1'bz}};
+            localparam              ZERO = {128{1'b0}};
+            
+            logic                   pll_areset, pll_locked, system_clock, system_sreset, adc_clock;
+   nano_top_pll                     pll (
+                                       .areset(pll_areset),
+                                       .inclk0(clock50),
+                                       .c0(system_clock),
+                                       .c1(adc_clock),
+                                       .locked(pll_locked));
+
+   system_monitor                   monitor (
+                                       .ext_clock(clock50),
+                                       .system_clock(system_clock),
+                                       .system_sreset(system_sreset),
+                                       .pll_locked(pll_locked),
+                                       .pll_areset(pll_areset));
+            
+            ///////////////////////////////////////////////////
+            localparam              CODE_BASE = 'h0;
+            localparam              CODE_WORDS = 4096;
+            localparam              CODE_WIDTHA = $clog2(CODE_WORDS);
+            ///////////////////////////////////////////////////
+            localparam              RAM_BASE = CODE_BASE + CODE_WORDS;
+            localparam              RAM_WORDS = 256;
+            localparam              RAM_WIDTHA = $clog2(RAM_WORDS);
+            ///////////////////////////////////////////////////
+            localparam              IRQ_BASE = RAM_BASE + RAM_WORDS;
+            localparam              IRQ_WORDS = 16;
+            localparam              IRQ_WIDTHA = $clog2(IRQ_WORDS);
+            localparam              IRQ_WIDTHD = 4;
+            ///////////////////////////////////////////////////
+            localparam              PIO_0_BASE = IRQ_BASE + IRQ_WORDS;
+            localparam              PIO_0_WORDS = 16;
+            localparam              PIO_0_WIDTHA = $clog2(PIO_0_WORDS);
+            localparam              PIO_0_WIDTHD = 5;
+            ///////////////////////////////////////////////////
+            localparam              WIDTHQ = 4; // IRQ qty
+            
+            initial begin
+               $display("CODE_BASE = 0x%x", CODE_BASE);
+               $display("RAM_BASE = 0x%x", RAM_BASE);
+               $display("IRQ_BASE = 0x%x", IRQ_BASE);
+               $display("PIO_0_BASE = 0x%x", PIO_0_BASE);
+            end
+            
+            localparam              WIDTHIA = $clog2(CODE_BASE + CODE_WORDS);
+            localparam              WIDTHDA = $clog2(PIO_0_BASE + PIO_0_WORDS);
+   
+            logic [WIDTHIA-1:0]     core_i_address;
+            logic [INSTRPATH-1:0]   core_i_readdata;
+            logic                   core_i_read, core_i_waitrequest, core_i_readdatavalid;
+            logic [WIDTHDA-1:0]     core_d_address;
+            logic [DATAPATH-1:0]    core_d_readdata, core_d_writedata;
+            logic                   core_d_read, core_d_write, core_d_waitrequest, core_d_readdatavalid;
+            logic [WIDTHQ-1:0]      core_irq;
+   nano2a                           # (
+                                       .ARCH("SMALL"),
+                                       .WIDTHIA(WIDTHIA),
+                                       .WIDTHID(INSTRPATH),
+                                       .WIDTHDA(WIDTHDA),
+                                       .WIDTHDD(DATAPATH),
+                                       .WIDTHS($clog2(STACK_DEPTH)),
+                                       .STKBASE(CODE_BASE + CODE_WORDS - STACK_DEPTH),
+                                       .RSTKBASE(CODE_BASE + CODE_WORDS - (STACK_DEPTH * 2)),
+                                       .PCRESET(4),
+                                       .IRQADDR(0),
+                                       .WIDTHQ(WIDTHQ))
+                                    core (
+                                       .clock(system_clock),
+                                       .sreset(system_sreset),
+                                       .i_address(core_i_address),
+                                       .i_readdata(core_i_readdata),
+                                       .i_read(core_i_read),
+                                       .i_waitrequest(core_i_waitrequest),
+                                       .i_readdatavalid(core_i_readdatavalid),
+                                       .d_address(core_d_address),
+                                       .d_readdata(core_d_readdata),
+                                       .d_writedata(core_d_writedata),
+                                       .d_read(core_d_read),
+                                       .d_write(core_d_write),
+                                       .d_waitrequest(core_d_waitrequest),
+                                       .d_readdatavalid(core_d_readdatavalid),
+                                       .irq(core_irq));
+                                       
+            wire                    cs_code = (core_d_address >= CODE_BASE) && (core_d_address < (CODE_BASE + CODE_WORDS));
+            wire                    cs_ram = (core_d_address >= RAM_BASE) && (core_d_address < (RAM_BASE + RAM_WORDS));
+            wire                    cs_irq = (core_d_address >= IRQ_BASE) && (core_d_address < (IRQ_BASE + IRQ_WORDS));
+            wire                    cs_pio_0 = (core_d_address >= PIO_0_BASE) && (core_d_address < (PIO_0_BASE + PIO_0_WORDS));
+            wire                    cs_timer_0 = (core_d_address >= TIMER_0_BASE) && (core_d_address < (TIMER_0_BASE + TIMER_0_WORDS));
+            wire                    cs_adc_0 = (core_d_address >= ADC_0_BASE) && (core_d_address < (ADC_0_BASE + ADC_0_WORDS));
+            wire                    cs_bldc_0 = (core_d_address >= BLDC_0_BASE) && (core_d_address < (BLDC_0_BASE + BLDC_0_WORDS));
+                                 
+            logic [DATAPATH-1:0]    code_readdata;
+            logic                   code_waitrequest, code_readdatavalid;
+   dpram                            # (
+                                       .WIDTHA(CODE_WIDTHA),
+                                       .WIDTHD(INSTRPATH),
+                                       .FILE("code.hex"))
+                                    code (
+                                       .clock(system_clock),
+                                       .sreset(system_sreset),
+                                       .a_address(core_i_address[CODE_WIDTHA-1:0]),
+                                       .a_readdata(core_i_readdata),
+                                       .a_writedata(DONTCARE[INSTRPATH-1:0]),
+                                       .a_read(core_i_read),
+                                       .a_write(1'b0),
+                                       .a_waitrequest(core_i_waitrequest),
+                                       .a_readdatavalid(core_i_readdatavalid),
+                                       .b_address(core_d_address[CODE_WIDTHA-1:0]),
+                                       .b_readdata(code_readdata),
+                                       .b_writedata(core_d_writedata[DATAPATH-1:0]),
+                                       .b_read(cs_code & core_d_read),
+                                       .b_write(cs_code & core_d_write),
+                                       .b_waitrequest(code_waitrequest),
+                                       .b_readdatavalid(code_readdatavalid));
+
+            logic [DATAPATH-1:0]    ram_readdata;
+            logic                   ram_waitrequest, ram_readdatavalid;
+   dpram                            # (
+                                       .WIDTHA(RAM_WIDTHA),
+                                       .WIDTHD(DATAPATH),
+                                       .FILE(""))
+                                    ram (
+                                       .clock(system_clock),
+                                       .sreset(system_sreset),
+                                       .a_address(core_d_address[RAM_WIDTHA-1:0]),
+                                       .a_readdata(ram_readdata),
+                                       .a_writedata(core_d_writedata),
+                                       .a_read(cs_ram & core_d_read),
+                                       .a_write(cs_ram & core_d_write),
+                                       .a_waitrequest(ram_waitrequest),
+                                       .a_readdatavalid(ram_readdatavalid),
+                                       .b_address(DONTCARE[RAM_WIDTHA-1:0]),
+                                       .b_readdata(),
+                                       .b_writedata(DONTCARE[DATAPATH-1:0]),
+                                       .b_read(1'b0),
+                                       .b_write(1'b0),
+                                       .b_waitrequest(),
+                                       .b_readdatavalid());
+                                       
+            logic [PIO_0_WIDTHD-1:0]    pio_0_readdata;
+            logic                   pio_0_waitrequest, pio_0_readdatavalid, pio_0_irq;
+   pio                              # (
+                                       .TYPE(0),
+                                       .WIDTH(PIO_0_WIDTHD))
+                                    pio_0 (
+                                       .clock(system_clock),
+                                       .sreset(system_sreset),
+                                       .address(core_d_address[PIO_0_WIDTHA-1:0]),
+                                       .readdata(pio_0_readdata),
+                                       .writedata(core_d_writedata[PIO_0_WIDTHD-1:0]),
+                                       .read(cs_pio_0 & core_d_read),
+                                       .write(cs_pio_0 & core_d_write),
+                                       .waitrequest(pio_0_waitrequest),
+                                       .readdatavalid(pio_0_readdatavalid),
+                                       .q(led),
+                                       .irq(pio_0_irq));
+                                       
+   always_comb begin
+      core_irq = {pio_0_irq};
+      core_d_waitrequest = 1'b0;
+      core_d_readdatavalid = code_readdatavalid | ram_readdatavalid | cs_irq | pio_0_readdatavalid;
+      core_d_readdata = ZERO[DATAPATH-1:0];
+      if (cs_irq) begin
+         core_d_waitrequest = 1'b0;
+         core_d_readdata = core_irq;
+      end
+      if (cs_code)
+         core_d_waitrequest = code_waitrequest;
+      if (code_readdatavalid)
+         core_d_readdata = code_readdata;
+      if (cs_ram)
+         core_d_waitrequest = ram_waitrequest;
+      if (ram_readdatavalid)
+         core_d_readdata = ram_readdata;
+      if (cs_pio_0)
+         core_d_waitrequest = pio_0_waitrequest;
+      if (pio_0_readdatavalid)
+         core_d_readdata = pio_0_readdata;
+   end
+                                 
+endmodule
